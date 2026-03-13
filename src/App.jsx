@@ -31,11 +31,11 @@ function App() {
   const [correctCiphers, setCorrectCiphers] = useState([]); 
   const [hintsUsedInRound, setHintsUsedInRound] = useState(0); 
 
-  // --- תוספות: זיכרון, נעילות ורמאויות ---
-  const [initialCiphers, setInitialCiphers] = useState([]); 
-  const [strikes, setStrikes] = useState({}); 
-  const [hintLimits, setHintLimits] = useState({}); 
-  const [forcedHintFor, setForcedHintFor] = useState(null); 
+  // --- תוספות: חשיפה, זיכרון, נעילות ורמאויות ---
+  const [initialIndices, setInitialIndices] = useState([]); // מעקב אחרי התיבות הספציפיות שנחשפו (אינדקסים)
+  const [strikes, setStrikes] = useState({}); // מעקב אחרי שגיאות { cipherNum: count }
+  const [hintLimits, setHintLimits] = useState({}); // גבולות שגיאה { cipherNum: limit }
+  const [forcedHintFor, setForcedHintFor] = useState(null); // תיבה שחייבת רמז כדי להשתחרר
 
   // --- תוספות למערכת הרמזים הכלכלית ---
   const [globalHintCost, setGlobalHintCost] = useState(1); 
@@ -43,7 +43,7 @@ function App() {
 
   // --- חיבור למקלדת טלפון מובנית ---
   const inputRef = useRef(null);
-  const [hiddenInputValue, setHiddenInputValue] = useState(' '); // רווח כדי לזהות מחיקה באנדרואיד/iOS
+  const [hiddenInputValue, setHiddenInputValue] = useState(' '); 
 
   // --- זיכרון הלקוח (Persistence) ---
   useEffect(() => {
@@ -79,47 +79,45 @@ function App() {
     });
   };
 
-  // --- פונקציה למציאת התיבה הפנויה הבאה (לקפיצה אוטומטית) ---
-  const getNextAvailableNumber = (phraseText, cMap, correctList, initialList, currentNum = null) => {
+  // --- מציאת התיבה הפנויה הבאה לקפיצה אוטומטית ---
+  const getNextAvailableNumber = (phraseText, cMap, correctList, initIndices, currentNum = null) => {
     if (!phraseText) return null;
     const chars = phraseText.split('');
     let startIndex = 0;
     
     if (currentNum !== null) {
-        const currIdx = chars.findIndex(c => c !== ' ' && cMap[c] === currentNum);
+        const currIdx = chars.findIndex((c, i) => c !== ' ' && cMap[c] === currentNum && !initIndices.includes(i));
         if (currIdx !== -1) startIndex = currIdx + 1;
     }
 
     for (let i = startIndex; i < chars.length; i++) {
-        const char = chars[i];
-        if (char === ' ') continue;
-        const num = cMap[char];
-        if (!correctList.includes(num) && !initialList.includes(num)) return num;
+        if (chars[i] === ' ') continue;
+        const num = cMap[chars[i]];
+        if (!initIndices.includes(i) && !correctList.includes(num)) return num;
     }
 
     for (let i = 0; i < startIndex; i++) {
-        const char = chars[i];
-        if (char === ' ') continue;
-        const num = cMap[char];
-        if (!correctList.includes(num) && !initialList.includes(num)) return num;
+        if (chars[i] === ' ') continue;
+        const num = cMap[chars[i]];
+        if (!initIndices.includes(i) && !correctList.includes(num)) return num;
     }
 
     return null;
   };
 
-  // --- לוגיקת יצירת משחק ---
+  // --- לוגיקת יצירת משחק (חשיפה חכמה של אות אחת לנפוצות) ---
   const generateCipherAndStart = (text, loadedProgress = null) => {
     if (loadedProgress) {
       setCipherMap(loadedProgress.cipherMap);
       setUserGuesses(loadedProgress.userGuesses);
       setCorrectCiphers(loadedProgress.correctCiphers);
-      setInitialCiphers(loadedProgress.initialCiphers);
+      setInitialIndices(loadedProgress.initialIndices || []); // שימוש באינדקסים
       setStrikes(loadedProgress.strikes);
       setHintLimits(loadedProgress.hintLimits);
       setForcedHintFor(loadedProgress.forcedHintFor);
       setHintsUsedInRound(loadedProgress.hintsUsedInRound);
       
-      const nextAvail = getNextAvailableNumber(text, loadedProgress.cipherMap, loadedProgress.correctCiphers, loadedProgress.initialCiphers, null);
+      const nextAvail = getNextAvailableNumber(text, loadedProgress.cipherMap, loadedProgress.correctCiphers, loadedProgress.initialIndices || [], null);
       setSelectedNumber(nextAvail);
       setShowWinModal(false);
       return;
@@ -140,9 +138,8 @@ function App() {
     const charFrequency = {};
     textNoSpaces.split('').forEach(char => { charFrequency[char] = (charFrequency[char] || 0) + 1; });
     
-    const multiOccurChars = uniqueChars.filter(c => charFrequency[c] > 1).sort(() => Math.random() - 0.5);
-    const singleOccurChars = uniqueChars.filter(c => charFrequency[c] === 1).sort(() => Math.random() - 0.5);
-    const mixedCharsForReveal = [...multiOccurChars, ...singleOccurChars];
+    // סידור אותיות לפי שכיחות (מהנפוצה ביותר לנדירה)
+    const sortedCharsByFreq = uniqueChars.sort((a, b) => charFrequency[b] - charFrequency[a]);
 
     let numToReveal = 1; 
     if (selectedLevel === 'easy') numToReveal = wordsCount >= 2 ? 1 : 2;
@@ -151,25 +148,25 @@ function App() {
 
     if (numToReveal >= uniqueChars.length) numToReveal = Math.max(0, uniqueChars.length - 1);
 
-    const initialGuesses = {};
-    const initialCorrect = [];
-    
-    for (let i = 0; i < numToReveal; i++) {
-      const char = mixedCharsForReveal[i]; 
-      const cipherNum = newCipher[char];
-      initialGuesses[cipherNum] = char;
-      initialCorrect.push(cipherNum);
-    }
+    const charsToReveal = sortedCharsByFreq.slice(0, numToReveal);
+    const newInitialIndices = [];
 
-    setUserGuesses(initialGuesses);
-    setCorrectCiphers(initialCorrect);
-    setInitialCiphers(initialCorrect); 
+    // בחירת אינדקס אחד רנדומלי עבור כל אות שנבחרה לחשיפה (מונע חשיפה של כל ה"נ" במילה "בננה")
+    charsToReveal.forEach(char => {
+        const allIndices = text.split('').map((c, i) => c === char ? i : -1).filter(i => i !== -1);
+        const randomIdx = allIndices[Math.floor(Math.random() * allIndices.length)];
+        newInitialIndices.push(randomIdx);
+    });
+
+    setInitialIndices(newInitialIndices);
+    setUserGuesses({});
+    setCorrectCiphers([]); 
     setStrikes({});
     setHintLimits({});
     setForcedHintFor(null);
     setHintsUsedInRound(0); 
     
-    const firstAvailable = getNextAvailableNumber(text, newCipher, initialCorrect, initialCorrect, null);
+    const firstAvailable = getNextAvailableNumber(text, newCipher, [], newInitialIndices, null);
     setSelectedNumber(firstAvailable);
     setShowWinModal(false);
   };
@@ -199,7 +196,7 @@ function App() {
 
   const saveCurrentProgress = () => {
     if (!player || !currentPhrase) return;
-    const currentProg = { cipherMap, userGuesses, correctCiphers, initialCiphers, strikes, hintLimits, forcedHintFor, hintsUsedInRound };
+    const currentProg = { cipherMap, userGuesses, correctCiphers, initialIndices, strikes, hintLimits, forcedHintFor, hintsUsedInRound };
     const updatedProgress = { ...(player.saved_progress || {}), [currentPhrase.id]: currentProg };
     syncPlayerToDB({ saved_progress: updatedProgress });
   };
@@ -209,17 +206,20 @@ function App() {
     fetchRandomPhrase();   
   };
 
-  // --- בדיקת ניצחון וסגירת המקלדת המובנית ---
+  // --- בדיקת ניצחון ---
   useEffect(() => {
     if (currentPhrase && Object.keys(userGuesses).length > 0) {
-      const isWin = currentPhrase.text.split('').every(char => char === ' ' || userGuesses[cipherMap[char]] === char);
+      const isWin = currentPhrase.text.split('').every((char, index) => {
+        if (char === ' ') return true;
+        if (initialIndices.includes(index)) return true; // תיבה התחלתית נחשבת פתורה
+        return userGuesses[cipherMap[char]] === char;
+      });
       
       if (isWin && !showWinModal) {
-        // מוריד את המקלדת כשיש ניצחון!
-        if (inputRef.current) inputRef.current.blur();
+        if (inputRef.current) inputRef.current.blur(); // סגירת מקלדת
 
         setShowWinModal(true);
-        const winReward = Math.max(0, 5 - hintsUsedInRound); // קנס על רמזים
+        const winReward = Math.max(0, 5 - hintsUsedInRound); 
         updateScore(winReward);
 
         let currentCycle = wordsInCycle + 1;
@@ -273,10 +273,18 @@ function App() {
       return;
     }
 
-    const unGuessedChars = currentPhrase.text.split('').filter(char => char !== ' ' && userGuesses[cipherMap[char]] !== char);
-    if (unGuessedChars.length > 0) {
-      const randomChar = unGuessedChars[Math.floor(Math.random() * unGuessedChars.length)];
-      handleVirtualKeyPress(randomChar, cipherMap[randomChar], true); // true אומר שזה רמז!
+    // מציאת תיבות שעדיין לא פתורות ולא נחשפו כקבועות
+    const unGuessedIndices = currentPhrase.text.split('').map((char, index) => {
+      if (char === ' ') return -1;
+      if (initialIndices.includes(index)) return -1;
+      if (userGuesses[cipherMap[char]] === char) return -1;
+      return index;
+    }).filter(i => i !== -1);
+
+    if (unGuessedIndices.length > 0) {
+      const randomIdx = unGuessedIndices[Math.floor(Math.random() * unGuessedIndices.length)];
+      const randomChar = currentPhrase.text[randomIdx];
+      handleVirtualKeyPress(randomChar, cipherMap[randomChar], true); 
       updateScore(-cost); 
       
       if (hintsUsedInRound > 0) {
@@ -288,12 +296,15 @@ function App() {
     }
   };
 
-  // --- ניהול לוגיקת הקלדה ---
+  // --- הקלדת אותיות ---
   const handleVirtualKeyPress = (letter, forcedNum = null, isHint = false) => {
     const targetNum = forcedNum || selectedNumber;
     if (targetNum === null) return;
     
-    if (initialCiphers.includes(targetNum)) return; 
+    // בדיקה שתיבות המספר לא כולן כבר "נחשפו" התחלתית
+    const isFullyInitial = currentPhrase.text.split('').every((c, i) => c === ' ' || cipherMap[c] !== targetNum || initialIndices.includes(i));
+    if (isFullyInitial) return; 
+
     if (forcedHintFor !== null && forcedHintFor !== targetNum) return alert("קודם שחרר את התיבה האדומה הנעולה בעזרת רמז!");
 
     const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetNum);
@@ -301,15 +312,14 @@ function App() {
     if (letter === correctLetter) {
       let currentCorrectCiphers = [...correctCiphers];
       if (!correctCiphers.includes(targetNum)) {
-        if (!isHint) updateScore(1); // לא נותן נקודה אם זה רמז
+        if (!isHint) updateScore(1); 
         currentCorrectCiphers.push(targetNum);
         setCorrectCiphers(currentCorrectCiphers);
         setStrikes(prev => ({...prev, [targetNum]: 0})); 
       }
       setUserGuesses(prev => ({ ...prev, [targetNum]: letter }));
       
-      // קפיצה אוטומטית (משאיר את המקלדת פתוחה!)
-      const nextNum = getNextAvailableNumber(currentPhrase.text, cipherMap, currentCorrectCiphers, initialCiphers, targetNum);
+      const nextNum = getNextAvailableNumber(currentPhrase.text, cipherMap, currentCorrectCiphers, initialIndices, targetNum);
       if (nextNum !== null) setSelectedNumber(nextNum);
       
     } else {
@@ -324,7 +334,7 @@ function App() {
       if (currentStrikes === limit - 1) alert("לא לרמות, ניסיון אחרון לאות הזאת לפני בקשת רמז!");
       else if (currentStrikes >= limit) {
         setForcedHintFor(targetNum);
-        if (inputRef.current) inputRef.current.blur(); // סוגר מקלדת אם ננעל!
+        if (inputRef.current) inputRef.current.blur(); 
         alert("חרגת ממספר הניסיונות לאות הזו! לחץ על כפתור הרמז כדי לשחרר.");
       }
       
@@ -333,30 +343,30 @@ function App() {
     }
   };
 
-  // --- קליטת הקלדה ממקלדת המכשיר ---
   const handleNativeInput = (e) => {
     const val = e.target.value;
-    if (val === '') { // מחיקה
+    if (val === '') { 
         handleVirtualKeyPress('');
         setHiddenInputValue(' '); 
-    } else if (val.length > 1) { // הקלדה
+    } else if (val.length > 1) { 
         const char = val[val.length - 1];
-        if (/^[\u0590-\u05FF]$/.test(char)) { // מוודא שזה עברית
+        if (/^[\u0590-\u05FF]$/.test(char)) { 
             handleVirtualKeyPress(char);
         }
         setHiddenInputValue(' '); 
     }
   };
 
-  // פתיחת מקלדת המכשיר בלחיצה על תיבה
-  const handleBoxClick = (num) => {
-    setSelectedNumber(num);
-    if (inputRef.current) {
-        inputRef.current.focus();
+  const handleBoxClick = (index, num, isInitial) => {
+    if (!isInitial) {
+        setSelectedNumber(num);
+        if (inputRef.current) {
+            inputRef.current.focus();
+        }
     }
   };
 
-  // --- אימות מחמיר בהרשמה ---
+  // --- אימות מחמיר ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
     const name = loginName.trim();
@@ -406,7 +416,7 @@ function App() {
     return 40;
   };
 
-  // --- תצוגות (Screens) ---
+  // --- מסכים ---
 
   if (appState === 'menu') {
     return (
@@ -484,7 +494,6 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
-        {/* השדה הנסתר שמפעיל את המקלדת המובנית של המכשיר */}
         <input 
            ref={inputRef}
            type="text"
@@ -494,7 +503,6 @@ function App() {
            autoComplete="off" autoCorrect="off" spellCheck="false"
         />
 
-        {/* חלק עליון קבוע: ציון, נושא ורמז - לא זז אף פעם! */}
         <div style={styles.topSectionFixed}>
             <div style={styles.topBar}>
               <div>
@@ -517,18 +525,17 @@ function App() {
             </div>
         </div>
 
-        {/* לוח המשחק - כאן שינינו ל-center כדי שיתמרכז! */}
         <div style={styles.boardArea}>
           <div style={styles.board}>
             {currentPhrase?.text.split('').map((char, index) => {
               if (char === ' ') return <div key={index} style={{ width: '12px' }}></div>;
               
               const num = cipherMap[char];
-              const guessed = userGuesses[num] || '';
-              const isSelected = selectedNumber === num;
-              const isInitial = initialCiphers.includes(num);
+              const isInitial = initialIndices.includes(index); 
+              const guessed = isInitial ? char : (userGuesses[num] || '');
+              const isSelected = selectedNumber === num && !isInitial;
               const isCorrect = correctCiphers.includes(num);
-              const isForcedHint = forcedHintFor === num;
+              const isForcedHint = forcedHintFor === num && !isInitial;
               
               let bgColor = '#fff';
               let borderColor = '#c8d6e5';
@@ -547,7 +554,7 @@ function App() {
                     borderColor, 
                     backgroundColor: bgColor 
                   }} 
-                  onClick={() => handleBoxClick(num)} 
+                  onClick={() => handleBoxClick(index, num, isInitial)} 
                 >
                   <div style={{...styles.guessedLetter, fontSize: `${boxSize * 0.6}px`, color: isInitial ? '#576574' : '#2f3542'}}>
                     {guessed}
@@ -581,7 +588,7 @@ function App() {
 // --- עיצוב ---
 const styles = {
   containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '15px', boxSizing: 'border-box' },
-  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'hidden' },
+  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden' },
   card: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '380px' },
   title: { color: '#ff6b6b', fontSize: '2rem', marginBottom: '10px', textShadow: '1px 1px 0 #feca57' },
   subtitle: { color: '#576574', fontSize: '1rem', marginBottom: '15px' },
@@ -604,7 +611,6 @@ const styles = {
   scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
-  // כאן השינוי! alignItems: 'center' כדי למרכז את הלוח במסך הריק
   boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px 10px', overflowY: 'auto' },
   board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
