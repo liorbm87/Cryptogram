@@ -402,8 +402,7 @@ function App() {
     }
   };
 
-  // --- ניקוי טעויות בלבד (חדש!) ---
-  // בדיקה בזמן אמת האם קיימות טעויות על הלוח
+  // --- ניקוי טעויות בלבד ---
   const hasMistakes = currentPhrase && Object.entries(userGuesses).some(([numStr, guessedLetter]) => {
     if (!guessedLetter) return false;
     const num = parseInt(numStr, 10);
@@ -417,14 +416,12 @@ function App() {
       Object.keys(newGuesses).forEach(numStr => {
         const num = parseInt(numStr, 10);
         const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === num);
-        // אם הלקוח ניחש משהו, וזה לא האות הנכונה -> מוחקים את זה
         if (newGuesses[numStr] && newGuesses[numStr] !== correctLetter) {
           newGuesses[numStr] = ''; 
         }
       });
       return newGuesses;
     });
-    // שים לב: אנחנו לא נוגעים ב-setStrikes! הפסילות שמורות והפונקציות יפעלו כרגיל.
   };
 
   // --- אימות מחמיר ---
@@ -657,9 +654,12 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
+        {/* הוספנו lang="he" ו-dir="rtl" כדי שהמקלדת תמיד תיפתח בעברית! */}
         <input 
            ref={inputRef}
            type="text"
+           lang="he"
+           dir="rtl"
            value={hiddenInputValue}
            onChange={handleNativeInput}
            onFocus={() => setIsKeyboardOpen(true)}
@@ -685,16 +685,31 @@ function App() {
             
             <div style={styles.hintContainer}>
                <div style={{display: 'flex', justifyContent: 'center', gap: '10px'}}>
-                 <button style={{...styles.hintBtn, animation: forcedHintFor ? 'pulse 1.5s infinite' : 'none'}} onClick={applyHint}>
+                 
+                 {/* כפתור רמז מעודכן שלא מוריד מקלדת */}
+                 <button 
+                   style={{...styles.hintBtn, animation: forcedHintFor ? 'pulse 1.5s infinite' : 'none'}} 
+                   onPointerDown={(e) => {
+                     e.preventDefault();
+                     applyHint();
+                   }}
+                 >
                    💡 {forcedHintFor ? 'שחרר נעילה!' : `רמז (${hintsUsedInRound === 0 ? 'חינם' : '-' + globalHintCost})`}
                  </button>
                  
-                 {/* כפתור נקה טעויות - מופיע רק אם יש טעויות! */}
+                 {/* כפתור נקה טעויות מעודכן שלא מוריד מקלדת */}
                  {hasMistakes && (
-                   <button style={styles.clearBtn} onClick={handleClearMistakes}>
+                   <button 
+                     style={styles.clearBtn} 
+                     onPointerDown={(e) => {
+                       e.preventDefault();
+                       handleClearMistakes();
+                     }}
+                   >
                      🧹 נקה טעויות
                    </button>
                  )}
+
                </div>
             </div>
         </div>
@@ -812,7 +827,6 @@ const styles = {
   hintContainer: { backgroundColor: '#dfe6e9', padding: '10px', textAlign: 'center' },
   hintBtn: { backgroundColor: '#ff9f43', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #e67e22', fontSize: '0.9rem' },
   
-  // עיצוב כפתור הניקוי החדש
   clearBtn: { backgroundColor: '#ff6b6b', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #e55039', fontSize: '0.9rem' },
 
   scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
