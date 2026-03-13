@@ -50,13 +50,12 @@ function App() {
   const [hiddenInputValue, setHiddenInputValue] = useState(' '); 
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
-  // --- חוקיות, עוגיות ומסמכים (חדש!) ---
+  // --- חוקיות, עוגיות ומסמכים ---
   const [showCookieConsent, setShowCookieConsent] = useState(false);
-  const [legalDoc, setLegalDoc] = useState(null); // 'terms' | 'privacy' | 'accessibility' | null
+  const [legalDoc, setLegalDoc] = useState(null); 
 
   // --- זיכרון הלקוח וקוקיז (Persistence) ---
   useEffect(() => {
-    // בדיקת שחקן מחובר
     const savedPlayer = localStorage.getItem('crypto_player_session');
     if (savedPlayer) {
       const p = JSON.parse(savedPlayer);
@@ -66,7 +65,6 @@ function App() {
       setPlayer(p);
     }
 
-    // בדיקת הסכמת עוגיות (Cookie Consent)
     const hasConsented = localStorage.getItem('crypto_cookie_consent');
     if (!hasConsented) {
       setShowCookieConsent(true);
@@ -464,7 +462,7 @@ function App() {
     return 40;
   };
 
-  // --- תצוגות מודאלים משפטיים (חדש) ---
+  // --- תצוגות מודאלים משפטיים ---
   const renderLegalModal = () => {
     if (!legalDoc) return null;
     
@@ -513,7 +511,15 @@ function App() {
     return (
       <div style={styles.containerFixed}>
         <div style={styles.card}>
-          <h1 style={styles.title}>🌟 מפענחי הצפנים 🌟</h1>
+          
+          {/* הוספת הלוגו של המשחק כאן למעלה בתפריט! */}
+          <img 
+            src="https://i.postimg.cc/MKHZBh1K/1000182904-removebg-preview.png" 
+            alt="מפענחי הצפנים" 
+            style={{ width: '130px', height: 'auto', margin: '0 auto 10px auto', display: 'block' }} 
+          />
+          <h1 style={styles.title}>מפענחי הצפנים</h1>
+
           <div style={styles.selectionBox}>
              <p style={styles.sectionLabel}>בחר גיל:</p>
              <div style={styles.tabGroup}>
@@ -575,7 +581,6 @@ function App() {
           </div>
         )}
 
-        {/* פופ-אפ מסמכים משפטיים */}
         {renderLegalModal()}
 
         {showGuestWarning && (
@@ -655,12 +660,17 @@ function App() {
             </div>
         </div>
 
+        {/* --- הלוח: עכשיו הוא עולה בצורה חכמה למעלה רק כשהמקלדת פתוחה --- */}
         <div style={{
           ...styles.boardArea, 
           justifyContent: isKeyboardOpen ? 'flex-start' : 'center',
-          paddingTop: isKeyboardOpen ? '30px' : '20px'
+          paddingTop: isKeyboardOpen ? '10px' : '20px'
         }}>
-          <div style={styles.board}>
+          <div style={{
+            ...styles.board,
+            marginTop: isKeyboardOpen ? '0' : 'auto',
+            marginBottom: isKeyboardOpen ? 'auto' : 'auto'
+          }}>
             {currentPhrase?.text.split('').map((char, index) => {
               if (char === ' ') return <div key={index} style={{ width: '12px' }}></div>;
               
@@ -727,7 +737,7 @@ const styles = {
   containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '15px', boxSizing: 'border-box', position: 'relative' },
   containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'hidden' }, 
   card: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '380px' },
-  title: { color: '#ff6b6b', fontSize: '2rem', marginBottom: '10px', textShadow: '1px 1px 0 #feca57' },
+  title: { color: '#ff6b6b', fontSize: '1.8rem', marginBottom: '10px', textShadow: '1px 1px 0 #feca57' },
   subtitle: { color: '#576574', fontSize: '1rem', marginBottom: '15px' },
   sectionLabel: { fontWeight: 'bold', margin: '8px 0 4px', fontSize: '0.85rem', textAlign: 'right' },
   tabGroup: { display: 'flex', gap: '5px' },
@@ -759,7 +769,7 @@ const styles = {
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
   boardArea: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', width: '100%', transition: 'all 0.3s ease' },
-  board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
+  board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
   
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
