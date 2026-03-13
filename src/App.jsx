@@ -512,7 +512,6 @@ function App() {
       <div style={styles.containerFixed}>
         <div style={styles.card}>
           
-          {/* הוספת הלוגו של המשחק כאן למעלה בתפריט! */}
           <img 
             src="https://i.postimg.cc/MKHZBh1K/1000182904-removebg-preview.png" 
             alt="מפענחי הצפנים" 
@@ -559,14 +558,12 @@ function App() {
           </div>
         </div>
 
-        {/* --- תפריט משפטי תחתון (Footer) --- */}
         <div style={styles.footer}>
           <span style={styles.footerLink} onClick={() => setLegalDoc('terms')}>תנאי שימוש</span> | 
           <span style={styles.footerLink} onClick={() => setLegalDoc('privacy')}>מדיניות פרטיות</span> | 
           <span style={styles.footerLink} onClick={() => setLegalDoc('accessibility')}>הצהרת נגישות</span>
         </div>
 
-        {/* חלונית עוגיות ופרטיות (Cookie Consent) */}
         {showCookieConsent && (
           <div style={styles.cookieBanner}>
             <div style={{fontSize: '1.5rem', marginBottom: '5px'}}>🍪</div>
@@ -660,7 +657,6 @@ function App() {
             </div>
         </div>
 
-        {/* --- הלוח: עכשיו הוא עולה בצורה חכמה למעלה רק כשהמקלדת פתוחה --- */}
         <div style={{
           ...styles.boardArea, 
           justifyContent: isKeyboardOpen ? 'flex-start' : 'center',
@@ -671,48 +667,63 @@ function App() {
             marginTop: isKeyboardOpen ? '0' : 'auto',
             marginBottom: isKeyboardOpen ? 'auto' : 'auto'
           }}>
-            {currentPhrase?.text.split('').map((char, index) => {
-              if (char === ' ') return <div key={index} style={{ width: '12px' }}></div>;
-              
-              const num = cipherMap[char];
-              const isInitial = initialIndices.includes(index); 
-              const guessed = isInitial ? char : (userGuesses[num] || '');
-              const isSelected = selectedNumber === num && !isInitial;
-              const isCorrect = correctCiphers.includes(num);
-              const isForcedHint = forcedHintFor === num && !isInitial;
-              
-              let bgColor = '#fff';
-              let borderColor = '#c8d6e5';
-              
-              if (isInitial) { bgColor = '#f1f2f6'; borderColor = '#a4b0be'; }
-              else if (isForcedHint) { bgColor = '#ffeaa7'; borderColor = '#e17055'; } 
-              else if (isSelected) { bgColor = '#fffdf3'; borderColor = '#ff9f43'; }
+            {/* -- מנגנון חיתוך המילים המשופר (עוטף כל מילה יחד) -- */}
+            {(() => {
+              let charCounter = 0;
+              return currentPhrase?.text.split(' ').map((word, wordIndex) => {
+                
+                const wordNodes = word.split('').map((char) => {
+                  const index = charCounter++;
+                  const num = cipherMap[char];
+                  const isInitial = initialIndices.includes(index); 
+                  const guessed = isInitial ? char : (userGuesses[num] || '');
+                  const isSelected = selectedNumber === num && !isInitial;
+                  const isCorrect = correctCiphers.includes(num);
+                  const isForcedHint = forcedHintFor === num && !isInitial;
+                  
+                  let bgColor = '#fff';
+                  let borderColor = '#c8d6e5';
+                  
+                  if (isInitial) { bgColor = '#f1f2f6'; borderColor = '#a4b0be'; }
+                  else if (isForcedHint) { bgColor = '#ffeaa7'; borderColor = '#e17055'; } 
+                  else if (isSelected) { bgColor = '#fffdf3'; borderColor = '#ff9f43'; }
 
-              return (
-                <div 
-                  key={index} 
-                  style={{
-                    ...styles.letterBox, 
-                    width: `${boxSize}px`, 
-                    height: `${boxSize * 1.35}px`, 
-                    borderColor, 
-                    backgroundColor: bgColor 
-                  }} 
-                  onPointerDown={(e) => {
-                    e.preventDefault(); 
-                    handleBoxClick(index, num, isInitial);
-                  }}
-                >
-                  <div style={{...styles.guessedLetter, fontSize: `${boxSize * 0.6}px`, color: isInitial ? '#576574' : '#2f3542'}}>
-                    {guessed}
-                    {isCorrect && !isInitial && <span style={styles.checkmark}>✔</span>}
+                  return (
+                    <div 
+                      key={index} 
+                      style={{
+                        ...styles.letterBox, 
+                        width: `${boxSize}px`, 
+                        height: `${boxSize * 1.35}px`, 
+                        borderColor, 
+                        backgroundColor: bgColor 
+                      }} 
+                      onPointerDown={(e) => {
+                        e.preventDefault(); 
+                        handleBoxClick(index, num, isInitial);
+                      }}
+                    >
+                      <div style={{...styles.guessedLetter, fontSize: `${boxSize * 0.6}px`, color: isInitial ? '#576574' : '#2f3542'}}>
+                        {guessed}
+                        {isCorrect && !isInitial && <span style={styles.checkmark}>✔</span>}
+                      </div>
+                      <div style={{...styles.secretNumber, fontSize: `${boxSize * 0.3}px`}}>
+                        {isForcedHint ? '🔒' : num}
+                      </div>
+                    </div>
+                  );
+                });
+                
+                // סופרים את הרווח שחתכנו כדי שהאינדקס האבסולוטי לא ייהרס
+                charCounter++;
+
+                return (
+                  <div key={wordIndex} style={styles.wordWrapper}>
+                    {wordNodes}
                   </div>
-                  <div style={{...styles.secretNumber, fontSize: `${boxSize * 0.3}px`}}>
-                    {isForcedHint ? '🔒' : num}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
           </div>
         </div>
 
@@ -750,14 +761,10 @@ const styles = {
   secondaryBtn: { backgroundColor: '#48dbfb', color: '#fff', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #2e86de' },
   input: { width: '100%', padding: '12px', margin: '8px 0', borderRadius: '10px', border: '2px solid #eee', fontSize: '1rem', boxSizing: 'border-box', outline: 'none' },
   
-  // פוטר לינקים משפטיים
   footer: { position: 'absolute', bottom: '15px', display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8fa6' },
   footerLink: { cursor: 'pointer', textDecoration: 'underline' },
 
-  // חלונית עוגיות
   cookieBanner: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', backgroundColor: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' },
-  
-  // מודאל משפטי
   legalModal: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '450px', maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' },
 
   topSectionFixed: { backgroundColor: '#2f3542', flexShrink: 0, borderBottom: '4px solid #feca57', display: 'flex', flexDirection: 'column' },
@@ -769,9 +776,13 @@ const styles = {
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
   boardArea: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', width: '100%', transition: 'all 0.3s ease' },
-  board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
   
-  letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
+  // -- שינוי חשוב לעיצוב הלוח ולרווחים --
+  board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '15px', maxWidth: '800px', width: '100%' },
+  // קופסה שעוטפת כל מילה ביחד ומונעת חיתוך
+  wordWrapper: { display: 'flex', gap: '6px', direction: 'rtl', flexWrap: 'nowrap' },
+  
+  letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative', flexShrink: 0 },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
   checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#1dd1a1', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
   secretNumber: { fontWeight: 'bold' },
