@@ -44,6 +44,9 @@ function App() {
   // --- חיבור למקלדת טלפון מובנית ---
   const inputRef = useRef(null);
   const [hiddenInputValue, setHiddenInputValue] = useState(' '); 
+  
+  // --- המשתנה החדש שבודק אם המקלדת פתוחה ---
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   // --- זיכרון הלקוח (Persistence) ---
   useEffect(() => {
@@ -151,7 +154,7 @@ function App() {
     const charsToReveal = sortedCharsByFreq.slice(0, numToReveal);
     const newInitialIndices = [];
 
-    // בחירת אינדקס אחד רנדומלי עבור כל אות שנבחרה לחשיפה 
+    // בחירת אינדקס אחד רנדומלי עבור כל אות שנבחרה לחשיפה (מונע חשיפה של כל ה"נ" במילה "בננה")
     charsToReveal.forEach(char => {
         const allIndices = text.split('').map((c, i) => c === char ? i : -1).filter(i => i !== -1);
         const randomIdx = allIndices[Math.floor(Math.random() * allIndices.length)];
@@ -206,7 +209,7 @@ function App() {
     fetchRandomPhrase();   
   };
 
-  // --- בדיקת ניצחון ולוגיקת ספירת רמזים ---
+  // --- בדיקת ניצחון ---
   useEffect(() => {
     if (currentPhrase && Object.keys(userGuesses).length > 0) {
       const isWin = currentPhrase.text.split('').every((char, index) => {
@@ -217,6 +220,7 @@ function App() {
       
       if (isWin && !showWinModal) {
         if (inputRef.current) inputRef.current.blur(); // סגירת מקלדת
+        setIsKeyboardOpen(false); // עדכון סטייט סגירת מקלדת
 
         setShowWinModal(true);
         const winReward = Math.max(0, 5 - hintsUsedInRound); 
@@ -226,7 +230,7 @@ function App() {
         let nextCost = globalHintCost;
         let triggerAlert = false;
 
-        // הספירה ואיפוס הרמזים קורים *רק* אם המחיר הגיע ל-10
+        // איפוס מחיר רמז רק כשמגיעים ל-10
         if (globalHintCost >= 10) {
             currentCycle += 1;
             if (currentCycle >= 3) {
@@ -235,7 +239,7 @@ function App() {
                 triggerAlert = true;
             }
         } else {
-            currentCycle = 0; // כל עוד אנחנו לא ב-10, אין טעם לספור ניצחונות לאיפוס
+            currentCycle = 0;
         }
 
         setWordsInCycle(currentCycle);
@@ -341,6 +345,7 @@ function App() {
       else if (currentStrikes >= limit) {
         setForcedHintFor(targetNum);
         if (inputRef.current) inputRef.current.blur(); 
+        setIsKeyboardOpen(false);
         alert("חרגת ממספר הניסיונות לאות הזו! לחץ על כפתור הרמז כדי לשחרר.");
       }
       
@@ -506,12 +511,15 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
+        {/* הוספנו onFocus ו-onBlur כדי לדעת מתי המקלדת עולה ויורדת! */}
         <input 
            ref={inputRef}
            type="text"
            value={hiddenInputValue}
            onChange={handleNativeInput}
-           style={{position: 'absolute', top: '-1000px', left: '-1000px', opacity: 0}}
+           onFocus={() => setIsKeyboardOpen(true)}
+           onBlur={() => setIsKeyboardOpen(false)}
+           style={{position: 'absolute', top: '50px', left: 0, opacity: 0, width: '1px', height: '1px', border: 'none', padding: 0}}
            autoComplete="off" autoCorrect="off" spellCheck="false"
         />
 
@@ -537,8 +545,12 @@ function App() {
             </div>
         </div>
 
-        {/* --- שינוי העיצוב שכאן פותר את בעיית המרכוז וההסתרה --- */}
-        <div style={styles.boardArea}>
+        {/* --- הלוח: משנה את המיקום שלו בהתאם למצב המקלדת! --- */}
+        <div style={{
+          ...styles.boardArea, 
+          justifyContent: isKeyboardOpen ? 'flex-start' : 'center',
+          paddingTop: isKeyboardOpen ? '30px' : '20px'
+        }}>
           <div style={styles.board}>
             {currentPhrase?.text.split('').map((char, index) => {
               if (char === ' ') return <div key={index} style={{ width: '12px' }}></div>;
@@ -601,7 +613,7 @@ function App() {
 // --- עיצוב ---
 const styles = {
   containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '15px', boxSizing: 'border-box' },
-  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'hidden' }, // מניעת גלילה חיצונית כדי שהמקלדת לא תשבור את המסך
+  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'hidden' }, 
   card: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '380px' },
   title: { color: '#ff6b6b', fontSize: '2rem', marginBottom: '10px', textShadow: '1px 1px 0 #feca57' },
   subtitle: { color: '#576574', fontSize: '1rem', marginBottom: '15px' },
@@ -624,11 +636,9 @@ const styles = {
   scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
-  // -- כאן הפתרון --
-  boardArea: { flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', overflowY: 'auto' },
-  board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
-  // -----------------
-
+  boardArea: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', width: '100%', transition: 'all 0.3s ease' },
+  board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
+  
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
   checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#1dd1a1', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
