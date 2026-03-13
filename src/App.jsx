@@ -69,6 +69,40 @@ function App() {
     });
   };
 
+  // --- תוספת: מציאת התיבה הפנויה הבאה ---
+  const getNextAvailableNumber = (phraseText, cMap, correctList, initialList, currentNum = null) => {
+    if (!phraseText) return null;
+    const chars = phraseText.split('');
+    let startIndex = 0;
+    
+    if (currentNum !== null) {
+        const currIdx = chars.findIndex(c => c !== ' ' && cMap[c] === currentNum);
+        if (currIdx !== -1) startIndex = currIdx + 1;
+    }
+
+    // מחפשים קדימה
+    for (let i = startIndex; i < chars.length; i++) {
+        const char = chars[i];
+        if (char === ' ') continue;
+        const num = cMap[char];
+        if (!correctList.includes(num) && !initialList.includes(num)) {
+            return num;
+        }
+    }
+
+    // אם הגענו לסוף המשפט, מחפשים מההתחלה עד הנקודה שלנו
+    for (let i = 0; i < startIndex; i++) {
+        const char = chars[i];
+        if (char === ' ') continue;
+        const num = cMap[char];
+        if (!correctList.includes(num) && !initialList.includes(num)) {
+            return num;
+        }
+    }
+
+    return null; // אם הכל נפתר
+  };
+
   // --- לוגיקת משחק (חשיפה חכמה ושחזור) ---
   
   const generateCipherAndStart = (text, loadedProgress = null) => {
@@ -82,7 +116,11 @@ function App() {
       setHintLimits(loadedProgress.hintLimits);
       setForcedHintFor(loadedProgress.forcedHintFor);
       setHintsUsedInRound(loadedProgress.hintsUsedInRound);
-      setSelectedNumber(null);
+      
+      // בוחרים את התיבה הראשונה שפנויה למשחק מיד עם החזרה
+      const nextAvail = getNextAvailableNumber(text, loadedProgress.cipherMap, loadedProgress.correctCiphers, loadedProgress.initialCiphers, null);
+      setSelectedNumber(nextAvail);
+      
       setShowWinModal(false);
       return;
     }
@@ -101,7 +139,15 @@ function App() {
     
     const charFrequency = {};
     textNoSpaces.split('').forEach(char => { charFrequency[char] = (charFrequency[char] || 0) + 1; });
-    const sortedCharsByFreq = uniqueChars.sort((a, b) => charFrequency[b] - charFrequency[a]);
+    
+    // --- תוספת: חשיפה רנדומלית מתוך הנפוצות (לא רק ראשונות) ---
+    const multiOccurChars = uniqueChars.filter(c => charFrequency[c] > 1);
+    const singleOccurChars = uniqueChars.filter(c => charFrequency[c] === 1);
+    
+    // מערבבים כל קבוצה בנפרד, ואז מחברים
+    multiOccurChars.sort(() => Math.random() - 0.5);
+    singleOccurChars.sort(() => Math.random() - 0.5);
+    const mixedCharsForReveal = [...multiOccurChars, ...singleOccurChars];
 
     let numToReveal = 1; 
     if (selectedLevel === 'easy') numToReveal = wordsCount >= 2 ? 1 : 2;
@@ -113,7 +159,7 @@ function App() {
     const initialGuesses = {};
     const initialCorrect = [];
     for (let i = 0; i < numToReveal; i++) {
-      const char = sortedCharsByFreq[i];
+      const char = mixedCharsForReveal[i]; // לוקח מהמעורבב!
       const cipherNum = newCipher[char];
       initialGuesses[cipherNum] = char;
       initialCorrect.push(cipherNum);
@@ -126,7 +172,11 @@ function App() {
     setHintLimits({});
     setForcedHintFor(null);
     setHintsUsedInRound(0);
-    setSelectedNumber(null);
+    
+    // מיד מסמנים את התיבה הריקה הראשונה!
+    const firstAvailable = getNextAvailableNumber(text, newCipher, initialCorrect, initialCorrect, null);
+    setSelectedNumber(firstAvailable);
+    
     setShowWinModal(false);
   };
 
@@ -241,12 +291,21 @@ function App() {
     
     if (letter === correctLetter) {
       // ניחוש נכון
+      let currentCorrectCiphers = [...correctCiphers];
       if (!correctCiphers.includes(targetNum)) {
         updateScore(1);
-        setCorrectCiphers(prev => [...prev, targetNum]);
+        currentCorrectCiphers.push(targetNum);
+        setCorrectCiphers(currentCorrectCiphers);
         setStrikes(prev => ({...prev, [targetNum]: 0})); // איפוס פסילות
       }
       setUserGuesses(prev => ({ ...prev, [targetNum]: letter }));
+
+      // --- תוספת: קפיצה אוטומטית לתיבה הבאה! ---
+      const nextNum = getNextAvailableNumber(currentPhrase.text, cipherMap, currentCorrectCiphers, initialCiphers, targetNum);
+      if (nextNum !== null) {
+          setSelectedNumber(nextNum);
+      }
+
     } else {
       // ניחוש שגוי או מחיקה
       if (letter === '') {
