@@ -151,7 +151,7 @@ function App() {
     const charsToReveal = sortedCharsByFreq.slice(0, numToReveal);
     const newInitialIndices = [];
 
-    // בחירת אינדקס אחד רנדומלי עבור כל אות שנבחרה לחשיפה
+    // בחירת אינדקס אחד רנדומלי עבור כל אות שנבחרה לחשיפה 
     charsToReveal.forEach(char => {
         const allIndices = text.split('').map((c, i) => c === char ? i : -1).filter(i => i !== -1);
         const randomIdx = allIndices[Math.floor(Math.random() * allIndices.length)];
@@ -206,7 +206,7 @@ function App() {
     fetchRandomPhrase();   
   };
 
-  // --- בדיקת ניצחון ---
+  // --- בדיקת ניצחון ולוגיקת ספירת רמזים ---
   useEffect(() => {
     if (currentPhrase && Object.keys(userGuesses).length > 0) {
       const isWin = currentPhrase.text.split('').every((char, index) => {
@@ -222,14 +222,20 @@ function App() {
         const winReward = Math.max(0, 5 - hintsUsedInRound); 
         updateScore(winReward);
 
-        let currentCycle = wordsInCycle + 1;
+        let currentCycle = wordsInCycle;
         let nextCost = globalHintCost;
         let triggerAlert = false;
 
-        if (currentCycle >= 3) {
-            currentCycle = 0;
-            nextCost = 1;
-            triggerAlert = true;
+        // הספירה ואיפוס הרמזים קורים *רק* אם המחיר הגיע ל-10
+        if (globalHintCost >= 10) {
+            currentCycle += 1;
+            if (currentCycle >= 3) {
+                currentCycle = 0;
+                nextCost = 1;
+                triggerAlert = true;
+            }
+        } else {
+            currentCycle = 0; // כל עוד אנחנו לא ב-10, אין טעם לספור ניצחונות לאיפוס
         }
 
         setWordsInCycle(currentCycle);
@@ -243,7 +249,7 @@ function App() {
         }
 
         if (triggerAlert) {
-            setTimeout(() => alert('🎉 סיימת 3 צפנים! מחירי הרמזים התאפסו חזרה ל-1!'), 400);
+            setTimeout(() => alert('🎉 פתרת 3 צפנים במחיר המקסימלי! מחירי הרמזים התאפסו חזרה ל-1!'), 400);
         }
       }
     }
@@ -427,14 +433,20 @@ function App() {
              <p style={styles.sectionLabel}>בחר גיל:</p>
              <div style={styles.tabGroup}>
                 {['ילדים', 'נוער', 'מבוגרים'].map(cat => (
-                  <button key={cat} onClick={() => setSelectedCategory(cat)} style={{...styles.tabBtn, backgroundColor: selectedCategory === cat ? '#48dbfb' : '#f1f2f6'}}>{cat}</button>
+                  <button 
+                    key={cat} 
+                    onClick={() => setSelectedCategory(cat)} 
+                    style={{...styles.tabBtn, backgroundColor: selectedCategory === cat ? '#48dbfb' : '#f1f2f6', color: '#000'}}
+                  >
+                    {cat}
+                  </button>
                 ))}
              </div>
              <p style={styles.sectionLabel}>בחר רמה:</p>
              <div style={styles.tabGroup}>
-                <button onClick={() => setSelectedLevel('easy')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'easy' ? '#1dd1a1' : '#f1f2f6'}}>קל</button>
-                <button onClick={() => setSelectedLevel('medium')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'medium' ? '#feca57' : '#f1f2f6'}}>בינוני</button>
-                <button onClick={() => setSelectedLevel('hard')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'hard' ? '#ff6b6b' : '#f1f2f6', color: selectedLevel === 'hard' ? '#fff' : '#2f3542'}}>קשה</button>
+                <button onClick={() => setSelectedLevel('easy')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'easy' ? '#1dd1a1' : '#f1f2f6', color: '#000'}}>קל</button>
+                <button onClick={() => setSelectedLevel('medium')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'medium' ? '#feca57' : '#f1f2f6', color: '#000'}}>בינוני</button>
+                <button onClick={() => setSelectedLevel('hard')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'hard' ? '#ff6b6b' : '#f1f2f6', color: selectedLevel === 'hard' ? '#fff' : '#000'}}>קשה</button>
              </div>
           </div>
           <hr style={{margin: '15px 0', opacity: 0.2}} />
@@ -525,6 +537,7 @@ function App() {
             </div>
         </div>
 
+        {/* --- שינוי העיצוב שכאן פותר את בעיית המרכוז וההסתרה --- */}
         <div style={styles.boardArea}>
           <div style={styles.board}>
             {currentPhrase?.text.split('').map((char, index) => {
@@ -588,8 +601,7 @@ function App() {
 // --- עיצוב ---
 const styles = {
   containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '15px', boxSizing: 'border-box' },
-  // שינינו ל-overflow: 'auto' כדי לאפשר גלילה אם המסך נחתך על ידי המקלדת
-  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'auto' },
+  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'hidden' }, // מניעת גלילה חיצונית כדי שהמקלדת לא תשבור את המסך
   card: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '380px' },
   title: { color: '#ff6b6b', fontSize: '2rem', marginBottom: '10px', textShadow: '1px 1px 0 #feca57' },
   subtitle: { color: '#576574', fontSize: '1rem', marginBottom: '15px' },
@@ -612,9 +624,11 @@ const styles = {
   scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
-  // כאן שינינו ל-flex-start כדי שהתוכן יתחיל מלמעלה וייגלל במקרה הצורך
-  boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '20px 10px', overflowY: 'auto' },
-  board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
+  // -- כאן הפתרון --
+  boardArea: { flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', overflowY: 'auto' },
+  board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
+  // -----------------
+
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
   checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#1dd1a1', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
