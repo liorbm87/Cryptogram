@@ -32,10 +32,10 @@ function App() {
   const [hintsUsedInRound, setHintsUsedInRound] = useState(0); 
 
   // --- תוספות: חשיפה, זיכרון, נעילות ורמאויות ---
-  const [initialIndices, setInitialIndices] = useState([]); 
-  const [strikes, setStrikes] = useState({}); 
-  const [hintLimits, setHintLimits] = useState({}); 
-  const [forcedHintFor, setForcedHintFor] = useState(null); 
+  const [initialIndices, setInitialIndices] = useState([]); // מעקב אחרי התיבות הספציפיות שנחשפו (אינדקסים)
+  const [strikes, setStrikes] = useState({}); // מעקב אחרי שגיאות { cipherNum: count }
+  const [hintLimits, setHintLimits] = useState({}); // גבולות שגיאה { cipherNum: limit }
+  const [forcedHintFor, setForcedHintFor] = useState(null); // תיבה שחייבת רמז כדי להשתחרר
 
   // --- תוספות למערכת הרמזים הכלכלית ---
   const [globalHintCost, setGlobalHintCost] = useState(1); 
@@ -111,7 +111,7 @@ function App() {
       setCipherMap(loadedProgress.cipherMap);
       setUserGuesses(loadedProgress.userGuesses);
       setCorrectCiphers(loadedProgress.correctCiphers);
-      setInitialIndices(loadedProgress.initialIndices || []); 
+      setInitialIndices(loadedProgress.initialIndices || []); // שימוש באינדקסים
       setStrikes(loadedProgress.strikes);
       setHintLimits(loadedProgress.hintLimits);
       setForcedHintFor(loadedProgress.forcedHintFor);
@@ -138,6 +138,7 @@ function App() {
     const charFrequency = {};
     textNoSpaces.split('').forEach(char => { charFrequency[char] = (charFrequency[char] || 0) + 1; });
     
+    // סידור אותיות לפי שכיחות (מהנפוצה ביותר לנדירה)
     const sortedCharsByFreq = uniqueChars.sort((a, b) => charFrequency[b] - charFrequency[a]);
 
     let numToReveal = 1; 
@@ -150,6 +151,7 @@ function App() {
     const charsToReveal = sortedCharsByFreq.slice(0, numToReveal);
     const newInitialIndices = [];
 
+    // בחירת אינדקס אחד רנדומלי עבור כל אות שנבחרה לחשיפה 
     charsToReveal.forEach(char => {
         const allIndices = text.split('').map((c, i) => c === char ? i : -1).filter(i => i !== -1);
         const randomIdx = allIndices[Math.floor(Math.random() * allIndices.length)];
@@ -209,12 +211,12 @@ function App() {
     if (currentPhrase && Object.keys(userGuesses).length > 0) {
       const isWin = currentPhrase.text.split('').every((char, index) => {
         if (char === ' ') return true;
-        if (initialIndices.includes(index)) return true; 
+        if (initialIndices.includes(index)) return true; // תיבה התחלתית נחשבת פתורה
         return userGuesses[cipherMap[char]] === char;
       });
       
       if (isWin && !showWinModal) {
-        if (inputRef.current) inputRef.current.blur(); 
+        if (inputRef.current) inputRef.current.blur(); // סגירת מקלדת
 
         setShowWinModal(true);
         const winReward = Math.max(0, 5 - hintsUsedInRound); 
@@ -224,6 +226,7 @@ function App() {
         let nextCost = globalHintCost;
         let triggerAlert = false;
 
+        // הספירה ואיפוס הרמזים קורים *רק* אם המחיר הגיע ל-10
         if (globalHintCost >= 10) {
             currentCycle += 1;
             if (currentCycle >= 3) {
@@ -232,7 +235,7 @@ function App() {
                 triggerAlert = true;
             }
         } else {
-            currentCycle = 0; 
+            currentCycle = 0; // כל עוד אנחנו לא ב-10, אין טעם לספור ניצחונות לאיפוס
         }
 
         setWordsInCycle(currentCycle);
@@ -255,7 +258,7 @@ function App() {
   // --- הפעלת רמזים ---
   const applyHint = () => {
     let cost = hintsUsedInRound === 0 ? 0 : globalHintCost;
-    if (score < cost) return alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות.`);
+    if (score < cost) return alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות. (בעתיד יתווסף כאן כפתור לצפייה בסרטון לנקודות חינם!)`);
 
     if (forcedHintFor !== null) {
       const currentLimit = hintLimits[forcedHintFor] || 5;
@@ -276,6 +279,7 @@ function App() {
       return;
     }
 
+    // מציאת תיבות שעדיין לא פתורות ולא נחשפו כקבועות
     const unGuessedIndices = currentPhrase.text.split('').map((char, index) => {
       if (char === ' ') return -1;
       if (initialIndices.includes(index)) return -1;
@@ -303,6 +307,7 @@ function App() {
     const targetNum = forcedNum || selectedNumber;
     if (targetNum === null) return;
     
+    // בדיקה שתיבות המספר לא כולן כבר "נחשפו" התחלתית
     const isFullyInitial = currentPhrase.text.split('').every((c, i) => c === ' ' || cipherMap[c] !== targetNum || initialIndices.includes(i));
     if (isFullyInitial) return; 
 
@@ -532,6 +537,7 @@ function App() {
             </div>
         </div>
 
+        {/* --- שינוי העיצוב שכאן פותר את בעיית המרכוז וההסתרה --- */}
         <div style={styles.boardArea}>
           <div style={styles.board}>
             {currentPhrase?.text.split('').map((char, index) => {
@@ -595,7 +601,7 @@ function App() {
 // --- עיצוב ---
 const styles = {
   containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '15px', boxSizing: 'border-box' },
-  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'hidden' },
+  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'hidden' }, // מניעת גלילה חיצונית כדי שהמקלדת לא תשבור את המסך
   card: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '380px' },
   title: { color: '#ff6b6b', fontSize: '2rem', marginBottom: '10px', textShadow: '1px 1px 0 #feca57' },
   subtitle: { color: '#576574', fontSize: '1rem', marginBottom: '15px' },
@@ -618,9 +624,10 @@ const styles = {
   scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
-  // --- פתרון גמישות הלוח ---
-  boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px', overflowY: 'auto' },
+  // -- כאן הפתרון --
+  boardArea: { flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', overflowY: 'auto' },
   board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
+  // -----------------
 
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
