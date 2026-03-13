@@ -29,6 +29,17 @@ function App() {
   const [userGuesses, setUserGuesses] = useState({}); 
   const [selectedNumber, setSelectedNumber] = useState(null);
   const [correctCiphers, setCorrectCiphers] = useState([]); // מעקב אחרי אותיות שקיבלו כבר נקודה
+  const [hintsUsedInRound, setHintsUsedInRound] = useState(0); // מעקב אחרי כמות הרמזים בסיבוב
+
+  // --- זיכרון הלקוח (Persistence) ---
+  useEffect(() => {
+    const savedPlayer = localStorage.getItem('crypto_player_session');
+    if (savedPlayer) {
+      const p = JSON.parse(savedPlayer);
+      setPlayer(p);
+      setScore(p.score || 0);
+    }
+  }, []);
 
   // --- פונקציות ניקוד וסנכרון ---
 
@@ -38,7 +49,14 @@ function App() {
         .from('players')
         .update({ score: newScore })
         .eq('id', player.id);
-      if (error) console.error("שגיאה בעדכון ניקוד:", error);
+      if (error) {
+        console.error("שגיאה בעדכון ניקוד:", error);
+      } else {
+        // עדכון הזיכרון המקומי
+        const updatedPlayer = { ...player, score: newScore };
+        localStorage.setItem('crypto_player_session', JSON.stringify(updatedPlayer));
+        setPlayer(updatedPlayer);
+      }
     }
   };
 
@@ -50,7 +68,7 @@ function App() {
     });
   };
 
-  // --- לוגיקת משחק ---
+  // --- לוגיקת משחק (כולל חשיפה חכמה) ---
   
   const generateCipherAndStart = (text) => {
     const numbers = Array.from({ length: 27 }, (_, i) => i + 1);
@@ -64,22 +82,42 @@ function App() {
     
     setCipherMap(newCipher);
 
-    // --- חשיפה ראשונית (קצה חוט) ---
-    // מוציאים את כל האותיות הייחודיות במשפט (ללא רווחים)
-    const uniqueChars = [...new Set(text.replace(/\s/g, '').split(''))];
+    // --- חשיפה ראשונית (קצה חוט) - חכמה ומדורגת ---
+    const textNoSpaces = text.replace(/\s/g, '');
+    const uniqueChars = [...new Set(textNoSpaces.split(''))];
+    const wordsCount = text.trim().split(/\s+/).length;
     
-    // כמות אותיות לחשיפה לפי רמה
-    let numToReveal = 3; // easy
-    if (selectedLevel === 'medium') numToReveal = 2;
-    if (selectedLevel === 'hard') numToReveal = 1;
+    // ספירת תדירות - כמה פעמים מופיעה כל אות
+    const charFrequency = {};
+    textNoSpaces.split('').forEach(char => {
+        charFrequency[char] = (charFrequency[char] || 0) + 1;
+    });
+
+    // מיון האותיות מהנפוצה ביותר לנדירה ביותר (כדי לעזור באמת לשחקן)
+    const sortedCharsByFreq = uniqueChars.sort((a, b) => charFrequency[b] - charFrequency[a]);
+
+    // כמות אותיות לחשיפה לפי רמה וחוקים
+    let numToReveal = 1; 
+    if (selectedLevel === 'easy') {
+      // לפחות 2 אותיות, או 1 אם זה מעל מילה אחת
+      numToReveal = wordsCount >= 2 ? 1 : 2;
+    } else if (selectedLevel === 'medium') {
+      numToReveal = 1;
+    } else if (selectedLevel === 'hard') {
+      numToReveal = 1; // חובה לפחות אות אחת!
+    }
+
+    // מניעת פתרון אוטומטי - אם המילה קצרה, נשאיר לפחות אות אחת לנחש
+    if (numToReveal >= uniqueChars.length) {
+      numToReveal = Math.max(0, uniqueChars.length - 1);
+    }
 
     const initialGuesses = {};
     const initialCorrect = [];
 
-    // חושפים אותיות אקראיות מתוך המשפט
-    const shuffledChars = uniqueChars.sort(() => Math.random() - 0.5);
-    for (let i = 0; i < Math.min(numToReveal, shuffledChars.length); i++) {
-      const char = shuffledChars[i];
+    // חושפים את האותיות הנפוצות ביותר
+    for (let i = 0; i < numToReveal; i++) {
+      const char = sortedCharsByFreq[i];
       const cipherNum = newCipher[char];
       initialGuesses[cipherNum] = char;
       initialCorrect.push(cipherNum);
@@ -88,6 +126,7 @@ function App() {
     setUserGuesses(initialGuesses);
     setCorrectCiphers(initialCorrect);
     setSelectedNumber(null);
+    setHintsUsedInRound(0); // איפוס מונה הרמזים בתחילת משחק
     setShowWinModal(false);
   };
 
@@ -125,10 +164,14 @@ function App() {
     }
   }, [userGuesses]);
 
-  // רמז - עולה 5 נקודות
+  // רמז מדורג (חינם -> 3 -> 5)
   const getHint = () => {
-    if (score < 5) {
-      alert("צריך לפחות 5 נקודות בשביל רמז!");
+    let cost = 0;
+    if (hintsUsedInRound === 1) cost = 3;
+    else if (hintsUsedInRound >= 2) cost = 5;
+
+    if (score < cost) {
+      alert(`צריך לפחות ${cost} נקודות בשביל רמז זה!`);
       return;
     }
 
@@ -141,7 +184,8 @@ function App() {
       const randomChar = unGuessedChars[Math.floor(Math.random() * unGuessedChars.length)];
       const num = cipherMap[randomChar];
       handleVirtualKeyPress(randomChar, num);
-      updateScore(-5);
+      updateScore(-cost);
+      setHintsUsedInRound(prev => prev + 1);
     }
   };
 
@@ -161,10 +205,10 @@ function App() {
     }
   };
 
-  // --- התחברות ללא סיסמה ---
+  // --- התחברות קפדנית (שם + טלפון חובה להתאמה) ---
   const handleLoginOrRegister = async () => {
-    if (!loginContact.trim()) {
-      setLoginError('חובה להזין טלפון או אימייל');
+    if (!loginContact.trim() || !loginName.trim()) {
+      setLoginError('חובה להזין שם פרטי וטלפון/אימייל במדויק!');
       return;
     }
     setLoading(true);
@@ -175,15 +219,17 @@ function App() {
       .single();
 
     if (existingPlayer) {
-      setPlayer(existingPlayer);
-      setScore(existingPlayer.score || 0);
-      setAppState('menu');
-    } else {
-      if (!loginName.trim()) {
-        setLoginError('שחקן חדש? בבקשה רשום שם פרטי');
+      // אם השחקן קיים אבל השם לא תואם - נחסום כניסה כפולה עם שמות אחרים
+      if (existingPlayer.first_name !== loginName.trim()) {
+        setLoginError('השם אינו תואם למספר הטלפון הקיים במערכת.');
         setLoading(false);
         return;
       }
+      setPlayer(existingPlayer);
+      setScore(existingPlayer.score || 0);
+      localStorage.setItem('crypto_player_session', JSON.stringify(existingPlayer));
+      setAppState('menu');
+    } else {
       const { data: newP, error } = await supabase
         .from('players')
         .insert([{ first_name: loginName.trim(), contact_info: loginContact.trim(), score: 0 }])
@@ -193,10 +239,22 @@ function App() {
       if (!error) {
         setPlayer(newP);
         setScore(0);
+        localStorage.setItem('crypto_player_session', JSON.stringify(newP));
         setAppState('menu');
+      } else {
+        setLoginError('שגיאה בהרשמה.');
       }
     }
     setLoading(false);
+  };
+
+  // פונקציה להתאמת גודל הריבועים לפי אורך המילה (שלא ייחתך מסך)
+  const getBoxSize = () => {
+    if (!currentPhrase) return 45;
+    const len = currentPhrase.text.length;
+    if (len > 15) return 28;
+    if (len > 10) return 36;
+    return 45;
   };
 
   // --- תצוגות (Screens) ---
@@ -268,12 +326,12 @@ function App() {
         <div style={styles.card}>
           <h2 style={styles.title}>כניסה למשחק</h2>
           <input 
-            type="text" placeholder="טלפון או אימייל" 
+            type="text" placeholder="טלפון או אימייל (חובה)" 
             value={loginContact} onChange={(e) => setLoginContact(e.target.value)} 
             style={styles.input} 
           />
           <input 
-            type="text" placeholder="שם פרטי (לשחקנים חדשים)" 
+            type="text" placeholder="שם פרטי (חובה תמיד!)" 
             value={loginName} onChange={(e) => setLoginName(e.target.value)} 
             style={styles.input} 
           />
@@ -301,18 +359,25 @@ function App() {
       );
     }
 
+    const boxSize = getBoxSize(); // גודל דינמי למילים
+
     return (
       <div style={styles.containerGame}>
         <div style={styles.topBar}>
-          <div style={{fontWeight:'bold'}}>{selectedCategory} | {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}</div>
-          <div style={styles.scoreDisplay}>✨ {score} נקודות</div>
-          <button style={styles.smallBtn} onClick={() => setAppState('menu')}>תפריט</button>
+          <div>
+            <div style={{fontSize: '0.85rem', opacity: 0.9}}>{selectedCategory} | {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}</div>
+            <div style={{fontWeight:'bold', marginTop: '2px', fontSize: '1.1rem'}}>נושא: {currentPhrase?.topic}</div>
+          </div>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+            <div style={styles.scoreDisplay}>✨ {score} </div>
+            <button style={styles.smallBtn} onClick={() => setAppState('menu')}>תפריט</button>
+          </div>
         </div>
 
         <div style={styles.boardArea}>
           <div style={styles.board}>
             {currentPhrase?.text.split('').map((char, index) => {
-              if (char === ' ') return <div key={index} style={{ width: '20px' }}></div>;
+              if (char === ' ') return <div key={index} style={{ width: '15px' }}></div>;
               const num = cipherMap[char];
               const guessed = userGuesses[num] || '';
               const isSelected = selectedNumber === num;
@@ -321,14 +386,16 @@ function App() {
                 <div 
                   key={index} 
                   style={{
-                    ...styles.letterBox, 
+                    ...styles.letterBox,
+                    width: `${boxSize}px`,
+                    height: `${boxSize * 1.4}px`, 
                     borderColor: isSelected ? '#ff9f43' : '#c8d6e5',
                     backgroundColor: isSelected ? '#fffdf3' : '#fff'
                   }} 
                   onClick={() => setSelectedNumber(num)}
                 >
-                  <div style={styles.guessedLetter}>{guessed}</div>
-                  <div style={styles.secretNumber}>{num}</div>
+                  <div style={{...styles.guessedLetter, fontSize: `${boxSize * 0.6}px`}}>{guessed}</div>
+                  <div style={{...styles.secretNumber, fontSize: `${boxSize * 0.3}px`}}>{num}</div>
                 </div>
               );
             })}
@@ -336,8 +403,10 @@ function App() {
         </div>
 
         <div style={styles.keyboardArea}>
-          <div style={{textAlign:'center', marginBottom: '15px'}}>
-             <button style={styles.hintBtn} onClick={getHint}>💡 בקש רמז (-5 נקודות)</button>
+          <div style={{textAlign:'center', marginBottom: '10px'}}>
+             <button style={styles.hintBtn} onClick={getHint}>
+               💡 בקש רמז ({hintsUsedInRound === 0 ? 'חינם!' : hintsUsedInRound === 1 ? '3- נקודות' : '5- נקודות'})
+             </button>
           </div>
           
           <div style={styles.keyboardRow}>
@@ -378,7 +447,8 @@ function App() {
 // --- אובייקט עיצוב מלא ---
 const styles = {
   container: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '20px', fontFamily: '"Segoe UI", sans-serif' },
-  containerGame: { display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: '#f7f1e3', direction: 'rtl', fontFamily: '"Segoe UI", sans-serif' },
+  // שינינו ל-100dvh ו-overflow:hidden כדי שלא תהיה גלילה במסך המשחק!
+  containerGame: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden' },
   card: { backgroundColor: '#fff', padding: '40px', borderRadius: '25px', boxShadow: '0 15px 30px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '400px' },
   title: { color: '#ff6b6b', fontSize: '2.2rem', marginBottom: '10px', textShadow: '2px 2px 0 #feca57' },
   subtitle: { color: '#576574', fontSize: '1.2rem', marginBottom: '20px' },
@@ -390,19 +460,21 @@ const styles = {
   menuButtons: { display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '10px' },
   primaryBtn: { backgroundColor: '#1dd1a1', color: '#fff', border: 'none', padding: '15px', borderRadius: '15px', fontSize: '1.2rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 5px 0 #10ac84' },
   secondaryBtn: { backgroundColor: '#48dbfb', color: '#fff', border: 'none', padding: '15px', borderRadius: '15px', fontSize: '1.2rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 5px 0 #2e86de', marginTop: '10px' },
-  hintBtn: { backgroundColor: '#ff9f43', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 0 #e67e22' },
+  hintBtn: { backgroundColor: '#ff9f43', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 0 #e67e22', fontSize: '0.9rem' },
   input: { width: '100%', padding: '15px', margin: '10px 0', borderRadius: '12px', border: '2px solid #c8d6e5', fontSize: '1.1rem', boxSizing: 'border-box', outline: 'none' },
-  topBar: { backgroundColor: '#2f3542', color: '#fff', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem' },
+  topBar: { backgroundColor: '#2f3542', color: '#fff', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
+  scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '5px' },
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '5px 10px', borderRadius: '8px', cursor: 'pointer' },
-  boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', overflowY: 'auto' },
-  board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px', maxWidth: '800px' },
-  letterBox: { width: '45px', height: '65px', backgroundColor: '#fff', borderBottom: '4px solid #54a0ff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: '8px', transition: '0.2s' },
-  guessedLetter: { fontSize: '1.8rem', fontWeight: 'bold', color: '#2f3542', height: '35px' },
-  secretNumber: { fontSize: '1rem', color: '#ff9f43', fontWeight: 'bold' },
-  keyboardArea: { backgroundColor: '#dfe6e9', padding: '15px', borderTop: '2px solid #b2bec3' },
-  keyboardRow: { display: 'flex', justifyContent: 'center', gap: '6px', marginBottom: '8px' },
-  keyBtn: { flex: 1, maxWidth: '42px', height: '48px', backgroundColor: '#fff', border: 'none', borderRadius: '8px', fontSize: '1.3rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 3px 0 #b2bec3', display: 'flex', justifyContent: 'center', alignItems: 'center' },
+  // הוספת overflowY כדי שהלוח יתכווץ במידת הצורך
+  boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px', overflowY: 'auto' },
+  board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', maxWidth: '800px' },
+  letterBox: { backgroundColor: '#fff', borderBottom: '4px solid #54a0ff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: '8px', transition: '0.2s' },
+  guessedLetter: { fontWeight: 'bold', color: '#2f3542' },
+  secretNumber: { color: '#ff9f43', fontWeight: 'bold' },
+  // עיגון המקלדת לתחתית
+  keyboardArea: { backgroundColor: '#dfe6e9', padding: '10px 15px', borderTop: '2px solid #b2bec3', flexShrink: 0, paddingBottom: 'max(15px, env(safe-area-inset-bottom))' },
+  keyboardRow: { display: 'flex', justifyContent: 'center', gap: '4px', marginBottom: '6px' },
+  keyBtn: { flex: 1, maxWidth: '42px', height: '45px', backgroundColor: '#fff', border: 'none', borderRadius: '8px', fontSize: '1.2rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 3px 0 #b2bec3', display: 'flex', justifyContent: 'center', alignItems: 'center' },
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
   modal: { backgroundColor: '#fff', padding: '40px', borderRadius: '30px', textAlign: 'center', maxWidth: '350px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }
 };
