@@ -453,13 +453,26 @@ function App() {
     setAppState('menu');
   };
 
+  // הפונקציה המשודרגת: מונעת חיתוך של מילים ארוכות!
   const getBoxSize = () => {
     if (!currentPhrase) return 40;
     const len = currentPhrase.text.length;
-    if (len > 25) return 22;
-    if (len > 18) return 28;
-    if (len > 12) return 32;
-    return 40;
+    
+    // גודל בסיסי לפי אורך המשפט הכללי
+    let baseSize = 40;
+    if (len > 25) baseSize = 22;
+    else if (len > 18) baseSize = 28;
+    else if (len > 12) baseSize = 32;
+
+    // חישוב מתמטי כדי לוודא שהמילה הכי ארוכה תכנס ברוחב המסך (כ-320px פנויים)
+    const words = currentPhrase.text.split(' ');
+    const maxWordLength = Math.max(...words.map(w => w.length));
+    
+    // הנוסחה לוקחת בחשבון את המרווח בין התיבות (4px)
+    const maxAllowedSize = Math.floor((320 - (4 * (maxWordLength - 1))) / maxWordLength);
+    
+    // מחזיר את הגודל הקטן מבין השניים, אך לא פחות מ-16 פיקסלים כדי שיישאר קריא
+    return Math.max(16, Math.min(baseSize, maxAllowedSize));
   };
 
   // --- תצוגות מודאלים משפטיים ---
@@ -667,7 +680,6 @@ function App() {
             marginTop: isKeyboardOpen ? '0' : 'auto',
             marginBottom: isKeyboardOpen ? 'auto' : 'auto'
           }}>
-            {/* -- מנגנון חיתוך המילים המשופר (עוטף כל מילה יחד) -- */}
             {(() => {
               let charCounter = 0;
               return currentPhrase?.text.split(' ').map((word, wordIndex) => {
@@ -714,7 +726,6 @@ function App() {
                   );
                 });
                 
-                // סופרים את הרווח שחתכנו כדי שהאינדקס האבסולוטי לא ייהרס
                 charCounter++;
 
                 return (
@@ -776,11 +787,10 @@ const styles = {
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
   boardArea: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', width: '100%', transition: 'all 0.3s ease' },
-  
-  // -- שינוי חשוב לעיצוב הלוח ולרווחים --
   board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '15px', maxWidth: '800px', width: '100%' },
-  // קופסה שעוטפת כל מילה ביחד ומונעת חיתוך
-  wordWrapper: { display: 'flex', gap: '6px', direction: 'rtl', flexWrap: 'nowrap' },
+  
+  // רווח התיבות שונה ל-4px כדי להשאיר יותר מקום לאותיות עצמן במילים ארוכות
+  wordWrapper: { display: 'flex', gap: '4px', direction: 'rtl', flexWrap: 'nowrap' },
   
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative', flexShrink: 0 },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
