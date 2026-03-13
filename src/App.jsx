@@ -259,7 +259,10 @@ function App() {
       
       if (isWin && !showWinModal) {
         setShowWinModal(true);
-        updateScore(5);
+        
+        // ירידת הבונוס הסופי לפי כמות הרמזים שנלקחו במשפט הזה
+        const winReward = Math.max(0, 5 - hintsUsedInRound);
+        updateScore(winReward);
 
         let currentCycle = wordsInCycle + 1;
         let nextCost = globalHintCost;
@@ -295,13 +298,13 @@ function App() {
     }
   }, [userGuesses]);
 
-  // --- רמזים - לוגיקה כלכלית חדשה ---
+  // --- רמזים - לוגיקה כלכלית חדשה (כולל מניעת נקודות על רמז) ---
   const applyHint = () => {
     // רמז ראשון תמיד חינם, אחר כך עולה לפי המחיר הגלובלי
     let cost = hintsUsedInRound === 0 ? 0 : globalHintCost;
     
     if (score < cost) {
-      return alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות.`);
+      return alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות. (בעתיד יתווסף כאן כפתור לצפייה בסרטון לנקודות חינם!)`);
     }
 
     // אם יש תיבה נעולה בגלל רמאות
@@ -333,8 +336,11 @@ function App() {
     
     if (unGuessedChars.length > 0) {
       const randomChar = unGuessedChars[Math.floor(Math.random() * unGuessedChars.length)];
-      handleVirtualKeyPress(randomChar, cipherMap[randomChar]);
-      updateScore(-cost);
+      
+      // שולחים "true" בסוף כדי שהפונקציה תדע שזה רמז ולא תיתן נקודה ללקוח!
+      handleVirtualKeyPress(randomChar, cipherMap[randomChar], true); 
+      
+      updateScore(-cost); // מוריד את העלות במדויק
       
       if (hintsUsedInRound > 0) {
           const nextCost = Math.min(10, globalHintCost + 1);
@@ -345,8 +351,8 @@ function App() {
     }
   };
 
-  // --- הקלדת אות במקלדת הוירטואלית ---
-  const handleVirtualKeyPress = (letter, forcedNum = null) => {
+  // --- הקלדת אות במקלדת הוירטואלית (נוסף משתנה isHint) ---
+  const handleVirtualKeyPress = (letter, forcedNum = null, isHint = false) => {
     const targetNum = forcedNum || selectedNumber;
     if (targetNum === null) return;
     
@@ -364,7 +370,12 @@ function App() {
       // ניחוש נכון!
       let currentCorrectCiphers = [...correctCiphers];
       if (!correctCiphers.includes(targetNum)) {
-        updateScore(1);
+        
+        // רק אם הלקוח ניחש בעצמו (לא רמז), הוא מקבל נקודה!
+        if (!isHint) {
+            updateScore(1);
+        }
+        
         currentCorrectCiphers.push(targetNum);
         setCorrectCiphers(currentCorrectCiphers);
         setStrikes(prev => ({...prev, [targetNum]: 0})); // איפוס פסילות
@@ -703,7 +714,8 @@ function App() {
             <div style={styles.modal}>
               <h1 style={{fontSize: '3rem', margin: 0}}>🎉</h1>
               <h2 style={{color: '#1dd1a1'}}>כל הכבוד!</h2>
-              <p>פיצחת וזכית ב-5 נקודות!</p>
+              {/* מציג את הבונוס הסופי אחרי הקנסות של הרמזים */}
+              <p>פיצחת וזכית ב-{Math.max(0, 5 - hintsUsedInRound)} נקודות!</p>
               <button style={styles.primaryBtn} onClick={fetchRandomPhrase}>לצופן הבא ➡️</button>
             </div>
           </div>
