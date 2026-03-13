@@ -12,6 +12,10 @@ function App() {
   const [noMorePhrases, setNoMorePhrases] = useState(false);
   const [loading, setLoading] = useState(false);
   
+  // --- הגדרות משחק (רמה וגיל) ---
+  const [selectedCategory, setSelectedCategory] = useState('ילדים');
+  const [selectedLevel, setSelectedLevel] = useState('easy'); // easy, medium, hard
+
   // --- נתוני שחקן ---
   const [player, setPlayer] = useState(null);
   const [score, setScore] = useState(0);
@@ -48,7 +52,7 @@ function App() {
 
   // --- לוגיקת משחק ---
   
-  const generateCipherMap = (text) => {
+  const generateCipherAndStart = (text) => {
     const numbers = Array.from({ length: 27 }, (_, i) => i + 1);
     const shuffledNumbers = numbers.sort(() => Math.random() - 0.5);
     const newCipher = {};
@@ -59,24 +63,46 @@ function App() {
     newCipher[' '] = ' ';
     
     setCipherMap(newCipher);
-    setUserGuesses({});
+
+    // --- חשיפה ראשונית (קצה חוט) ---
+    // מוציאים את כל האותיות הייחודיות במשפט (ללא רווחים)
+    const uniqueChars = [...new Set(text.replace(/\s/g, '').split(''))];
+    
+    // כמות אותיות לחשיפה לפי רמה
+    let numToReveal = 3; // easy
+    if (selectedLevel === 'medium') numToReveal = 2;
+    if (selectedLevel === 'hard') numToReveal = 1;
+
+    const initialGuesses = {};
+    const initialCorrect = [];
+
+    // חושפים אותיות אקראיות מתוך המשפט
+    const shuffledChars = uniqueChars.sort(() => Math.random() - 0.5);
+    for (let i = 0; i < Math.min(numToReveal, shuffledChars.length); i++) {
+      const char = shuffledChars[i];
+      const cipherNum = newCipher[char];
+      initialGuesses[cipherNum] = char;
+      initialCorrect.push(cipherNum);
+    }
+
+    setUserGuesses(initialGuesses);
+    setCorrectCiphers(initialCorrect);
     setSelectedNumber(null);
-    setCorrectCiphers([]);
     setShowWinModal(false);
   };
 
   const fetchRandomPhrase = async () => {
     setLoading(true);
-    // כאן בעתיד נוסיף סינון של "משפטים שהשחקן כבר פתר"
     const { data, error } = await supabase
       .from('phrases')
       .select('*')
-      .eq('category', 'ילדים'); // כרגע כברירת מחדל, אפשר לשנות לפי בחירה
+      .eq('category', selectedCategory)
+      .eq('level', selectedLevel);
 
     if (!error && data && data.length > 0) {
       const randomItem = data[Math.floor(Math.random() * data.length)];
       setCurrentPhrase(randomItem);
-      generateCipherMap(randomItem.text);
+      generateCipherAndStart(randomItem.text);
       setNoMorePhrases(false);
     } else {
       setNoMorePhrases(true);
@@ -180,6 +206,26 @@ function App() {
       <div style={styles.container}>
         <div style={styles.card}>
           <h1 style={styles.title}>🌟 מפענחי הצפנים 🌟</h1>
+          
+          {/* בחירת קטגוריה ורמה */}
+          <div style={styles.selectionBox}>
+             <p style={{fontWeight: 'bold', marginBottom: '5px'}}>בחר גיל:</p>
+             <div style={styles.tabGroup}>
+                <button onClick={() => setSelectedCategory('ילדים')} style={{...styles.tabBtn, backgroundColor: selectedCategory === 'ילדים' ? '#48dbfb' : '#f1f2f6'}}>ילדים</button>
+                <button onClick={() => setSelectedCategory('נוער')} style={{...styles.tabBtn, backgroundColor: selectedCategory === 'נוער' ? '#48dbfb' : '#f1f2f6'}}>נוער</button>
+                <button onClick={() => setSelectedCategory('מבוגרים')} style={{...styles.tabBtn, backgroundColor: selectedCategory === 'מבוגרים' ? '#48dbfb' : '#f1f2f6'}}>מבוגרים</button>
+             </div>
+
+             <p style={{fontWeight: 'bold', marginBottom: '5px', marginTop: '15px'}}>בחר רמה:</p>
+             <div style={styles.tabGroup}>
+                <button onClick={() => setSelectedLevel('easy')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'easy' ? '#1dd1a1' : '#f1f2f6'}}>קל</button>
+                <button onClick={() => setSelectedLevel('medium')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'medium' ? '#feca57' : '#f1f2f6'}}>בינוני</button>
+                <button onClick={() => setSelectedLevel('hard')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'hard' ? '#ff6b6b' : '#f1f2f6', color: selectedLevel === 'hard' ? '#fff' : '#2f3542'}}>קשה</button>
+             </div>
+          </div>
+
+          <hr style={{margin: '20px 0', opacity: 0.2}} />
+
           {player ? (
             <div style={styles.welcomeBox}>
               <h3>היי {player.first_name}! 👋</h3>
@@ -247,8 +293,8 @@ function App() {
         <div style={styles.container}>
           <div style={styles.card}>
             <h2 style={styles.title}>🏆 סיימת הכל! 🏆</h2>
-            <p>פתרת את כל הצפנים בקטגוריה הזו.</p>
-            <p>חזור בקרוב, אנחנו מעדכנים משפטים חדשים כל הזמן!</p>
+            <p>אין יותר משפטים ב{selectedCategory} רמת {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}.</p>
+            <p>חזור בקרוב לעדכונים!</p>
             <button style={styles.primaryBtn} onClick={() => setAppState('menu')}>חזור לתפריט</button>
           </div>
         </div>
@@ -258,7 +304,7 @@ function App() {
     return (
       <div style={styles.containerGame}>
         <div style={styles.topBar}>
-          <div style={{fontWeight:'bold'}}>נושא: {currentPhrase?.topic}</div>
+          <div style={{fontWeight:'bold'}}>{selectedCategory} | {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}</div>
           <div style={styles.scoreDisplay}>✨ {score} נקודות</div>
           <button style={styles.smallBtn} onClick={() => setAppState('menu')}>תפריט</button>
         </div>
@@ -336,9 +382,12 @@ const styles = {
   card: { backgroundColor: '#fff', padding: '40px', borderRadius: '25px', boxShadow: '0 15px 30px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '400px' },
   title: { color: '#ff6b6b', fontSize: '2.2rem', marginBottom: '10px', textShadow: '2px 2px 0 #feca57' },
   subtitle: { color: '#576574', fontSize: '1.2rem', marginBottom: '20px' },
+  selectionBox: { textAlign: 'right', marginTop: '10px' },
+  tabGroup: { display: 'flex', gap: '5px', marginTop: '5px' },
+  tabBtn: { flex: 1, padding: '8px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem', transition: '0.2s' },
   welcomeBox: { marginBottom: '20px' },
   scoreBadge: { backgroundColor: '#feca57', color: '#fff', padding: '8px 20px', borderRadius: '25px', display: 'inline-block', fontWeight: 'bold', fontSize: '1.1rem' },
-  menuButtons: { display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' },
+  menuButtons: { display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '10px' },
   primaryBtn: { backgroundColor: '#1dd1a1', color: '#fff', border: 'none', padding: '15px', borderRadius: '15px', fontSize: '1.2rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 5px 0 #10ac84' },
   secondaryBtn: { backgroundColor: '#48dbfb', color: '#fff', border: 'none', padding: '15px', borderRadius: '15px', fontSize: '1.2rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 5px 0 #2e86de', marginTop: '10px' },
   hintBtn: { backgroundColor: '#ff9f43', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 0 #e67e22' },
