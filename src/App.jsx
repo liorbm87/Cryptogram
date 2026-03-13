@@ -252,7 +252,7 @@ function App() {
   // --- הפעלת רמזים ---
   const applyHint = () => {
     let cost = hintsUsedInRound === 0 ? 0 : globalHintCost;
-    if (score < cost) return alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות.`);
+    if (score < cost) return alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות. (בעתיד יתווסף כאן כפתור לצפייה בסרטון לנקודות חינם!)`);
 
     if (forcedHintFor !== null) {
       const currentLimit = hintLimits[forcedHintFor] || 5;
@@ -288,7 +288,7 @@ function App() {
     }
   };
 
-  // --- ניהול לוגיקת הקלדה (שגיאות, פסילות, קפיצה) ---
+  // --- ניהול לוגיקת הקלדה ---
   const handleVirtualKeyPress = (letter, forcedNum = null, isHint = false) => {
     const targetNum = forcedNum || selectedNumber;
     if (targetNum === null) return;
@@ -517,7 +517,7 @@ function App() {
             </div>
         </div>
 
-        {/* לוח המשחק שנגלל מאחורי המקלדת */}
+        {/* לוח המשחק - כאן שינינו ל-center כדי שיתמרכז! */}
         <div style={styles.boardArea}>
           <div style={styles.board}>
             {currentPhrase?.text.split('').map((char, index) => {
@@ -596,7 +596,6 @@ const styles = {
   secondaryBtn: { backgroundColor: '#48dbfb', color: '#fff', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #2e86de' },
   input: { width: '100%', padding: '12px', margin: '8px 0', borderRadius: '10px', border: '2px solid #eee', fontSize: '1rem', boxSizing: 'border-box', outline: 'none' },
   
-  // הקיבוע של החלק העליון עם הרמז
   topSectionFixed: { backgroundColor: '#2f3542', flexShrink: 0, borderBottom: '4px solid #feca57', display: 'flex', flexDirection: 'column' },
   topBar: { color: '#fff', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   hintContainer: { backgroundColor: '#dfe6e9', padding: '10px', textAlign: 'center' },
@@ -604,7 +603,9 @@ const styles = {
   
   scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
-  boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '20px 10px', overflowY: 'auto' },
+  
+  // כאן השינוי! alignItems: 'center' כדי למרכז את הלוח במסך הריק
+  boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px 10px', overflowY: 'auto' },
   board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
