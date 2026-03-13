@@ -1,11 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-
-
-const supabaseUrl = 'https://nxugbbhdmicyfzrxamdc.supabase.co'
-
-const supabaseKey = 'sb_publishable_gz3Ar69rITTjNn5L96Uctw_cW4n9B5m'
-
-
+// Vite מושך את המשתנים מהקובץ .env באמצעות האובייקט import.meta.env
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
