@@ -32,36 +32,51 @@ function App() {
   const [hintsUsedInRound, setHintsUsedInRound] = useState(0); 
 
   // --- תוספות: חשיפה, זיכרון, נעילות ורמאויות ---
-  const [initialIndices, setInitialIndices] = useState([]); // מעקב אחרי התיבות הספציפיות שנחשפו (אינדקסים)
-  const [strikes, setStrikes] = useState({}); // מעקב אחרי שגיאות { cipherNum: count }
-  const [hintLimits, setHintLimits] = useState({}); // גבולות שגיאה { cipherNum: limit }
-  const [forcedHintFor, setForcedHintFor] = useState(null); // תיבה שחייבת רמז כדי להשתחרר
+  const [initialIndices, setInitialIndices] = useState([]); 
+  const [strikes, setStrikes] = useState({}); 
+  const [hintLimits, setHintLimits] = useState({}); 
+  const [forcedHintFor, setForcedHintFor] = useState(null); 
 
   // --- תוספות למערכת הרמזים הכלכלית ---
-  const [globalHintCost, setGlobalHintCost] = useState(1); 
-  const [wordsInCycle, setWordsInCycle] = useState(0); 
+  const [localStats, setLocalStats] = useState({});
+  const currentKey = `${selectedCategory}_${selectedLevel}`;
+  const currentStats = player?.category_stats?.[currentKey] || localStats[currentKey] || { score: 5, hint_cost: 1, cycle: 0 };
+  const currentScore = currentStats.score;
+  const globalHintCost = currentStats.hint_cost;
+  const wordsInCycle = currentStats.cycle;
 
   // --- חיבור למקלדת טלפון מובנית ---
   const inputRef = useRef(null);
   const [hiddenInputValue, setHiddenInputValue] = useState(' '); 
-  
-  // --- המשתנה החדש שבודק אם המקלדת פתוחה ---
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
-  // --- זיכרון הלקוח (Persistence) ---
+  // --- חוקיות, עוגיות ומסמכים (חדש!) ---
+  const [showCookieConsent, setShowCookieConsent] = useState(false);
+  const [legalDoc, setLegalDoc] = useState(null); // 'terms' | 'privacy' | 'accessibility' | null
+
+  // --- זיכרון הלקוח וקוקיז (Persistence) ---
   useEffect(() => {
+    // בדיקת שחקן מחובר
     const savedPlayer = localStorage.getItem('crypto_player_session');
     if (savedPlayer) {
       const p = JSON.parse(savedPlayer);
       p.completed_phrases = p.completed_phrases || [];
       p.saved_progress = p.saved_progress || {};
-      
+      p.category_stats = p.category_stats || {};
       setPlayer(p);
-      setScore(p.score || 0);
-      setGlobalHintCost(p.global_hint_cost || 1);
-      setWordsInCycle(p.words_in_cycle || 0);
+    }
+
+    // בדיקת הסכמת עוגיות (Cookie Consent)
+    const hasConsented = localStorage.getItem('crypto_cookie_consent');
+    if (!hasConsented) {
+      setShowCookieConsent(true);
     }
   }, []);
+
+  const acceptCookies = () => {
+    localStorage.setItem('crypto_cookie_consent', 'true');
+    setShowCookieConsent(false);
+  };
 
   const syncPlayerToDB = async (updatedFields) => {
     if (player?.id) {
@@ -74,12 +89,20 @@ function App() {
     }
   };
 
+  const updateCategoryStats = (updates) => {
+    const newStats = { ...currentStats, ...updates };
+    if (player) {
+        const newAllStats = { ...(player.category_stats || {}), [currentKey]: newStats };
+        const updatedPlayer = { ...player, category_stats: newAllStats };
+        setPlayer(updatedPlayer);
+        syncPlayerToDB({ category_stats: newAllStats });
+    } else {
+        setLocalStats(prev => ({ ...prev, [currentKey]: newStats }));
+    }
+  };
+
   const updateScore = (amount) => {
-    setScore(prev => {
-      const newScore = Math.max(0, prev + amount);
-      if (player) syncPlayerToDB({ score: newScore });
-      return newScore;
-    });
+    updateCategoryStats({ score: Math.max(0, currentScore + amount) });
   };
 
   // --- מציאת התיבה הפנויה הבאה לקפיצה אוטומטית ---
@@ -108,13 +131,13 @@ function App() {
     return null;
   };
 
-  // --- לוגיקת יצירת משחק (חשיפה חכמה של אות אחת לנפוצות) ---
+  // --- לוגיקת יצירת משחק ---
   const generateCipherAndStart = (text, loadedProgress = null) => {
     if (loadedProgress) {
       setCipherMap(loadedProgress.cipherMap);
       setUserGuesses(loadedProgress.userGuesses);
       setCorrectCiphers(loadedProgress.correctCiphers);
-      setInitialIndices(loadedProgress.initialIndices || []); // שימוש באינדקסים
+      setInitialIndices(loadedProgress.initialIndices || []); 
       setStrikes(loadedProgress.strikes);
       setHintLimits(loadedProgress.hintLimits);
       setForcedHintFor(loadedProgress.forcedHintFor);
@@ -141,7 +164,6 @@ function App() {
     const charFrequency = {};
     textNoSpaces.split('').forEach(char => { charFrequency[char] = (charFrequency[char] || 0) + 1; });
     
-    // סידור אותיות לפי שכיחות (מהנפוצה ביותר לנדירה)
     const sortedCharsByFreq = uniqueChars.sort((a, b) => charFrequency[b] - charFrequency[a]);
 
     let numToReveal = 1; 
@@ -154,7 +176,6 @@ function App() {
     const charsToReveal = sortedCharsByFreq.slice(0, numToReveal);
     const newInitialIndices = [];
 
-    // בחירת אינדקס אחד רנדומלי עבור כל אות שנבחרה לחשיפה (מונע חשיפה של כל ה"נ" במילה "בננה")
     charsToReveal.forEach(char => {
         const allIndices = text.split('').map((c, i) => c === char ? i : -1).filter(i => i !== -1);
         const randomIdx = allIndices[Math.floor(Math.random() * allIndices.length)];
@@ -209,28 +230,26 @@ function App() {
     fetchRandomPhrase();   
   };
 
-  // --- בדיקת ניצחון ---
+  // --- בדיקת ניצחון ולוגיקת ספירת רמזים ---
   useEffect(() => {
     if (currentPhrase && Object.keys(userGuesses).length > 0) {
       const isWin = currentPhrase.text.split('').every((char, index) => {
         if (char === ' ') return true;
-        if (initialIndices.includes(index)) return true; // תיבה התחלתית נחשבת פתורה
+        if (initialIndices.includes(index)) return true;
         return userGuesses[cipherMap[char]] === char;
       });
       
       if (isWin && !showWinModal) {
-        if (inputRef.current) inputRef.current.blur(); // סגירת מקלדת
-        setIsKeyboardOpen(false); // עדכון סטייט סגירת מקלדת
+        if (inputRef.current) inputRef.current.blur(); 
+        setIsKeyboardOpen(false);
 
         setShowWinModal(true);
         const winReward = Math.max(0, 5 - hintsUsedInRound); 
-        updateScore(winReward);
-
+        
         let currentCycle = wordsInCycle;
         let nextCost = globalHintCost;
         let triggerAlert = false;
 
-        // איפוס מחיר רמז רק כשמגיעים ל-10
         if (globalHintCost >= 10) {
             currentCycle += 1;
             if (currentCycle >= 3) {
@@ -242,14 +261,30 @@ function App() {
             currentCycle = 0;
         }
 
-        setWordsInCycle(currentCycle);
-        setGlobalHintCost(nextCost);
+        const newScore = Math.max(0, currentScore + winReward);
+        const newStats = { score: newScore, hint_cost: nextCost, cycle: currentCycle };
 
         if (player) {
           const newCompleted = [...(player.completed_phrases || []), currentPhrase.id];
           const updatedSaved = { ...(player.saved_progress || {}) };
           delete updatedSaved[currentPhrase.id];
-          syncPlayerToDB({ completed_phrases: newCompleted, saved_progress: updatedSaved, words_in_cycle: currentCycle, global_hint_cost: nextCost });
+          
+          const newAllStats = { ...(player.category_stats || {}), [currentKey]: newStats };
+          
+          const updatedPlayer = { 
+              ...player, 
+              completed_phrases: newCompleted, 
+              saved_progress: updatedSaved,
+              category_stats: newAllStats
+          };
+          setPlayer(updatedPlayer);
+          syncPlayerToDB({ 
+              completed_phrases: newCompleted, 
+              saved_progress: updatedSaved, 
+              category_stats: newAllStats 
+          });
+        } else {
+          setLocalStats(prev => ({ ...prev, [currentKey]: newStats }));
         }
 
         if (triggerAlert) {
@@ -262,7 +297,7 @@ function App() {
   // --- הפעלת רמזים ---
   const applyHint = () => {
     let cost = hintsUsedInRound === 0 ? 0 : globalHintCost;
-    if (score < cost) return alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות. (בעתיד יתווסף כאן כפתור לצפייה בסרטון לנקודות חינם!)`);
+    if (currentScore < cost) return alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות. (בעתיד יתווסף כאן כפתור לצפייה בסרטון לנקודות חינם!)`);
 
     if (forcedHintFor !== null) {
       const currentLimit = hintLimits[forcedHintFor] || 5;
@@ -271,19 +306,15 @@ function App() {
       setHintLimits(prev => ({...prev, [forcedHintFor]: newLimit}));
       setStrikes(prev => ({...prev, [forcedHintFor]: 0}));
       setForcedHintFor(null);
-      updateScore(-cost);
       
-      if (hintsUsedInRound > 0) {
-          const nextCost = Math.min(10, globalHintCost + 1);
-          setGlobalHintCost(nextCost);
-          if (player) syncPlayerToDB({ global_hint_cost: nextCost });
-      }
+      const nextCost = hintsUsedInRound > 0 ? Math.min(10, globalHintCost + 1) : globalHintCost;
+      updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost });
+      
       setHintsUsedInRound(prev => prev + 1);
       alert(`התיבה שוחררה! קיבלת עוד ${newLimit} ניסיונות לאות זו.`);
       return;
     }
 
-    // מציאת תיבות שעדיין לא פתורות ולא נחשפו כקבועות
     const unGuessedIndices = currentPhrase.text.split('').map((char, index) => {
       if (char === ' ') return -1;
       if (initialIndices.includes(index)) return -1;
@@ -295,13 +326,10 @@ function App() {
       const randomIdx = unGuessedIndices[Math.floor(Math.random() * unGuessedIndices.length)];
       const randomChar = currentPhrase.text[randomIdx];
       handleVirtualKeyPress(randomChar, cipherMap[randomChar], true); 
-      updateScore(-cost); 
       
-      if (hintsUsedInRound > 0) {
-          const nextCost = Math.min(10, globalHintCost + 1);
-          setGlobalHintCost(nextCost);
-          if (player) syncPlayerToDB({ global_hint_cost: nextCost });
-      }
+      const nextCost = hintsUsedInRound > 0 ? Math.min(10, globalHintCost + 1) : globalHintCost;
+      updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost });
+      
       setHintsUsedInRound(prev => prev + 1);
     }
   };
@@ -311,7 +339,6 @@ function App() {
     const targetNum = forcedNum || selectedNumber;
     if (targetNum === null) return;
     
-    // בדיקה שתיבות המספר לא כולן כבר "נחשפו" התחלתית
     const isFullyInitial = currentPhrase.text.split('').every((c, i) => c === ' ' || cipherMap[c] !== targetNum || initialIndices.includes(i));
     if (isFullyInitial) return; 
 
@@ -397,14 +424,23 @@ function App() {
       }
       existingPlayer.completed_phrases = existingPlayer.completed_phrases || [];
       existingPlayer.saved_progress = existingPlayer.saved_progress || {};
-      setPlayer(existingPlayer); setScore(existingPlayer.score || 0); setGlobalHintCost(existingPlayer.global_hint_cost || 1); setWordsInCycle(existingPlayer.words_in_cycle || 0);
+      existingPlayer.category_stats = existingPlayer.category_stats || {};
+      
+      setPlayer(existingPlayer); 
       localStorage.setItem('crypto_player_session', JSON.stringify(existingPlayer));
       setAppState('menu');
     } else {
-      const newPlayerData = { first_name: name, contact_info: contact, score: 0, completed_phrases: [], saved_progress: {}, global_hint_cost: 1, words_in_cycle: 0 };
+      const newPlayerData = { 
+        first_name: name, 
+        contact_info: contact, 
+        score: 0, 
+        completed_phrases: [], 
+        saved_progress: {}, 
+        category_stats: {} 
+      };
       const { data: newP, error } = await supabase.from('players').insert([newPlayerData]).select().single();
       if (!error) {
-        setPlayer(newP); setScore(0); setGlobalHintCost(1); setWordsInCycle(0);
+        setPlayer(newP); 
         localStorage.setItem('crypto_player_session', JSON.stringify(newP));
         setAppState('menu');
       } else setLoginError('שגיאה בהרשמה.');
@@ -414,7 +450,8 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('crypto_player_session');
-    setPlayer(null); setScore(0); setGlobalHintCost(1); setWordsInCycle(0);
+    setPlayer(null); 
+    setLocalStats({});
     setAppState('menu');
   };
 
@@ -425,6 +462,49 @@ function App() {
     if (len > 18) return 28;
     if (len > 12) return 32;
     return 40;
+  };
+
+  // --- תצוגות מודאלים משפטיים (חדש) ---
+  const renderLegalModal = () => {
+    if (!legalDoc) return null;
+    
+    let title = '';
+    let content = '';
+
+    if (legalDoc === 'terms') {
+      title = 'תקנון ותנאי שימוש';
+      content = `ברוכים הבאים למשחק "מפענחי הצפנים".
+השימוש באתר ובמשחק כפוף לתנאים הבאים:
+1. המשחק מוגש "כפי שהוא" (AS IS), ללא כל התחייבות או אחריות מכל סוג שהוא.
+2. ייתכן כי באתר יוצגו פרסומות מצדדים שלישיים (כגון גוגל). אין אנו אחראים לתוכן הפרסומות.
+3. כל זכויות היוצרים והקניין הרוחני במשחק, בעיצוב ובלוגיקה שייכות ליוצר המשחק.
+4. אנו שומרים את הזכות לשנות את כללי המשחק, הניקוד, או לאפס נתונים בכל עת.`;
+    } else if (legalDoc === 'privacy') {
+      title = 'מדיניות פרטיות';
+      content = `אנו מכבדים את פרטיותך.
+1. המערכת שומרת נתונים בסיסיים שסיפקת (שם, וכתובת דוא"ל או טלפון) אך ורק לצורך זיהוי, שמירת ההתקדמות שלך במשחק ומניעת רמאויות.
+2. אנו לא מעבירים את פרטי הקשר שלך לשום צד שלישי לצרכי שיווק.
+3. האתר עושה שימוש בקבצי עוגיות (Cookies) ואחסון מקומי (Local Storage) כדי לזכור את מצב המשחק שלך.
+4. האתר משתמש בשירותי פרסום של צד שלישי (כמו Google AdSense). חברות אלו עשויות להשתמש במידע לא מזהה אישית אודות הביקורים שלך על מנת להציג פרסומות המותאמות אישית עבורך.`;
+    } else if (legalDoc === 'accessibility') {
+      title = 'הצהרת נגישות';
+      content = `אנו רואים חשיבות עליונה בהנגשת האתר לאנשים עם מוגבלויות.
+1. האתר מותאם לגלישה בדפדפנים מודרניים ולשימוש במכשירים ניידים.
+2. אנו משתדלים לשמור על קונטרסט גבוה בין טקסט לרקע וניווט ברור.
+3. במידה ונתקלתם בבעיית נגישות כלשהי במהלך המשחק, נשמח אם תפנו אלינו כדי שנוכל לתקן ולשפר את החוויה עבור כולם.`;
+    }
+
+    return (
+      <div style={styles.overlay}>
+        <div style={styles.legalModal}>
+          <h2 style={{color: '#2f3542', marginTop: 0}}>{title}</h2>
+          <div style={{textAlign: 'right', whiteSpace: 'pre-line', lineHeight: '1.6', color: '#576574', marginBottom: '20px', fontSize: '0.95rem'}}>
+            {content}
+          </div>
+          <button style={styles.primaryBtn} onClick={() => setLegalDoc(null)}>סגור והבנתי</button>
+        </div>
+      </div>
+    );
   };
 
   // --- מסכים ---
@@ -458,15 +538,46 @@ function App() {
           {player ? (
             <div style={styles.welcomeBox}>
               <h3 style={{margin: '0 0 5px 0', color: '#2f3542'}}>היי {player.first_name}! 👋</h3>
-              <div style={styles.scoreBadge}>ניקוד: {score}</div>
+              <div style={styles.scoreBadge}>נקודות ברמה זו: {currentScore}</div>
               <div style={{marginTop: '10px'}}><button style={styles.logoutBtn} onClick={handleLogout}>התנתק משתמש</button></div>
             </div>
-          ) : ( <p style={styles.subtitle}>מוכנים לפצח את הקוד?</p> )}
+          ) : ( 
+            <div style={styles.welcomeBox}>
+               <p style={styles.subtitle}>מוכנים לפצח את הקוד?</p>
+               <div style={styles.scoreBadge}>נקודות ברמה זו: {currentScore}</div>
+            </div>
+          )}
           <div style={styles.menuButtons}>
             {!player && <button style={styles.secondaryBtn} onClick={() => setAppState('login')}>התחברות / הרשמה</button>}
             <button style={styles.primaryBtn} onClick={() => { setAppState('playing'); fetchRandomPhrase(); }}>שחק עכשיו 🎮</button>
           </div>
         </div>
+
+        {/* --- תפריט משפטי תחתון (Footer) --- */}
+        <div style={styles.footer}>
+          <span style={styles.footerLink} onClick={() => setLegalDoc('terms')}>תנאי שימוש</span> | 
+          <span style={styles.footerLink} onClick={() => setLegalDoc('privacy')}>מדיניות פרטיות</span> | 
+          <span style={styles.footerLink} onClick={() => setLegalDoc('accessibility')}>הצהרת נגישות</span>
+        </div>
+
+        {/* חלונית עוגיות ופרטיות (Cookie Consent) */}
+        {showCookieConsent && (
+          <div style={styles.cookieBanner}>
+            <div style={{fontSize: '1.5rem', marginBottom: '5px'}}>🍪</div>
+            <h4 style={{margin: '0 0 5px 0', color: '#2f3542'}}>אנחנו משתמשים בעוגיות</h4>
+            <p style={{fontSize: '0.85rem', color: '#576574', margin: '0 0 15px 0'}}>
+              האתר עושה שימוש בקבצי "קוקיז" כדי לשמור את ההתקדמות שלך ולספק חווית משחק מותאמת אישית, וכן להצגת מודעות רלוונטיות (כמו Google AdSense).
+            </p>
+            <div style={{display: 'flex', gap: '10px'}}>
+              <button style={{...styles.primaryBtn, padding: '10px 20px', fontSize: '1rem'}} onClick={acceptCookies}>הבנתי והסכמתי</button>
+              <button style={{...styles.secondaryBtn, padding: '10px 20px', fontSize: '1rem', backgroundColor: '#f1f2f6', color: '#2f3542', boxShadow: 'none'}} onClick={() => setLegalDoc('privacy')}>קרא עוד</button>
+            </div>
+          </div>
+        )}
+
+        {/* פופ-אפ מסמכים משפטיים */}
+        {renderLegalModal()}
+
         {showGuestWarning && (
           <div style={styles.overlay}><div style={styles.modal}>
             <h2 style={{color:'#ff6b6b'}}>רגע אחד!</h2><p>בתור אורח, הניקוד לא יישמר בשרת.</p>
@@ -511,7 +622,6 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
-        {/* הוספנו onFocus ו-onBlur כדי לדעת מתי המקלדת עולה ויורדת! */}
         <input 
            ref={inputRef}
            type="text"
@@ -530,7 +640,7 @@ function App() {
                 <div style={{fontWeight:'bold', marginTop: '2px', fontSize: '1rem'}}>נושא: {currentPhrase?.topic}</div>
               </div>
               <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                <div style={styles.scoreDisplay}>✨ {score} </div>
+                <div style={styles.scoreDisplay}>✨ {currentScore} </div>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
                   <button style={{...styles.smallBtn, backgroundColor: '#feca57', color: '#2f3542', border: 'none', fontWeight:'bold'}} onClick={handleSkip}>דלג ⏭️</button>
                   <button style={styles.smallBtn} onClick={() => {saveCurrentProgress(); setAppState('menu');}}>תפריט</button>
@@ -545,7 +655,6 @@ function App() {
             </div>
         </div>
 
-        {/* --- הלוח: משנה את המיקום שלו בהתאם למצב המקלדת! --- */}
         <div style={{
           ...styles.boardArea, 
           justifyContent: isKeyboardOpen ? 'flex-start' : 'center',
@@ -579,7 +688,10 @@ function App() {
                     borderColor, 
                     backgroundColor: bgColor 
                   }} 
-                  onClick={() => handleBoxClick(index, num, isInitial)} 
+                  onPointerDown={(e) => {
+                    e.preventDefault(); 
+                    handleBoxClick(index, num, isInitial);
+                  }}
                 >
                   <div style={{...styles.guessedLetter, fontSize: `${boxSize * 0.6}px`, color: isInitial ? '#576574' : '#2f3542'}}>
                     {guessed}
@@ -612,7 +724,7 @@ function App() {
 
 // --- עיצוב ---
 const styles = {
-  containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '15px', boxSizing: 'border-box' },
+  containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '15px', boxSizing: 'border-box', position: 'relative' },
   containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'hidden' }, 
   card: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '380px' },
   title: { color: '#ff6b6b', fontSize: '2rem', marginBottom: '10px', textShadow: '1px 1px 0 #feca57' },
@@ -628,6 +740,16 @@ const styles = {
   secondaryBtn: { backgroundColor: '#48dbfb', color: '#fff', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #2e86de' },
   input: { width: '100%', padding: '12px', margin: '8px 0', borderRadius: '10px', border: '2px solid #eee', fontSize: '1rem', boxSizing: 'border-box', outline: 'none' },
   
+  // פוטר לינקים משפטיים
+  footer: { position: 'absolute', bottom: '15px', display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8fa6' },
+  footerLink: { cursor: 'pointer', textDecoration: 'underline' },
+
+  // חלונית עוגיות
+  cookieBanner: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', backgroundColor: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' },
+  
+  // מודאל משפטי
+  legalModal: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '450px', maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' },
+
   topSectionFixed: { backgroundColor: '#2f3542', flexShrink: 0, borderBottom: '4px solid #feca57', display: 'flex', flexDirection: 'column' },
   topBar: { color: '#fff', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   hintContainer: { backgroundColor: '#dfe6e9', padding: '10px', textAlign: 'center' },
@@ -637,7 +759,7 @@ const styles = {
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
   boardArea: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', width: '100%', transition: 'all 0.3s ease' },
-  board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
+  board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
   
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
