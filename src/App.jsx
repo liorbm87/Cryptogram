@@ -151,7 +151,7 @@ function App() {
     const charsToReveal = sortedCharsByFreq.slice(0, numToReveal);
     const newInitialIndices = [];
 
-    // בחירת אינדקס אחד רנדומלי עבור כל אות שנבחרה לחשיפה (מונע חשיפה של כל ה"נ" במילה "בננה")
+    // בחירת אינדקס אחד רנדומלי עבור כל אות שנבחרה לחשיפה
     charsToReveal.forEach(char => {
         const allIndices = text.split('').map((c, i) => c === char ? i : -1).filter(i => i !== -1);
         const randomIdx = allIndices[Math.floor(Math.random() * allIndices.length)];
@@ -588,7 +588,8 @@ function App() {
 // --- עיצוב ---
 const styles = {
   containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '15px', boxSizing: 'border-box' },
-  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', fontFamily: '"Segoe UI", sans-serif', overflow: 'hidden' },
+  // שינינו ל-overflow: 'auto' כדי לאפשר גלילה אם המסך נחתך על ידי המקלדת
+  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'auto' },
   card: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '380px' },
   title: { color: '#ff6b6b', fontSize: '2rem', marginBottom: '10px', textShadow: '1px 1px 0 #feca57' },
   subtitle: { color: '#576574', fontSize: '1rem', marginBottom: '15px' },
@@ -611,7 +612,8 @@ const styles = {
   scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
-  boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px 10px', overflowY: 'auto' },
+  // כאן שינינו ל-flex-start כדי שהתוכן יתחיל מלמעלה וייגלל במקרה הצורך
+  boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '20px 10px', overflowY: 'auto' },
   board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', maxWidth: '800px', width: '100%' },
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative' },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
