@@ -402,6 +402,31 @@ function App() {
     }
   };
 
+  // --- ניקוי טעויות בלבד (חדש!) ---
+  // בדיקה בזמן אמת האם קיימות טעויות על הלוח
+  const hasMistakes = currentPhrase && Object.entries(userGuesses).some(([numStr, guessedLetter]) => {
+    if (!guessedLetter) return false;
+    const num = parseInt(numStr, 10);
+    const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === num);
+    return guessedLetter !== correctLetter;
+  });
+
+  const handleClearMistakes = () => {
+    setUserGuesses(prev => {
+      const newGuesses = { ...prev };
+      Object.keys(newGuesses).forEach(numStr => {
+        const num = parseInt(numStr, 10);
+        const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === num);
+        // אם הלקוח ניחש משהו, וזה לא האות הנכונה -> מוחקים את זה
+        if (newGuesses[numStr] && newGuesses[numStr] !== correctLetter) {
+          newGuesses[numStr] = ''; 
+        }
+      });
+      return newGuesses;
+    });
+    // שים לב: אנחנו לא נוגעים ב-setStrikes! הפסילות שמורות והפונקציות יפעלו כרגיל.
+  };
+
   // --- אימות מחמיר ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
@@ -453,25 +478,20 @@ function App() {
     setAppState('menu');
   };
 
-  // הפונקציה המשודרגת: מונעת חיתוך של מילים ארוכות!
+  // הפונקציה המשודרגת: מונעת חיתוך של מילים ארוכות
   const getBoxSize = () => {
     if (!currentPhrase) return 40;
     const len = currentPhrase.text.length;
     
-    // גודל בסיסי לפי אורך המשפט הכללי
     let baseSize = 40;
     if (len > 25) baseSize = 22;
     else if (len > 18) baseSize = 28;
     else if (len > 12) baseSize = 32;
 
-    // חישוב מתמטי כדי לוודא שהמילה הכי ארוכה תכנס ברוחב המסך (כ-320px פנויים)
     const words = currentPhrase.text.split(' ');
     const maxWordLength = Math.max(...words.map(w => w.length));
-    
-    // הנוסחה לוקחת בחשבון את המרווח בין התיבות (4px)
     const maxAllowedSize = Math.floor((320 - (4 * (maxWordLength - 1))) / maxWordLength);
     
-    // מחזיר את הגודל הקטן מבין השניים, אך לא פחות מ-16 פיקסלים כדי שיישאר קריא
     return Math.max(16, Math.min(baseSize, maxAllowedSize));
   };
 
@@ -664,9 +684,18 @@ function App() {
             </div>
             
             <div style={styles.hintContainer}>
-               <button style={{...styles.hintBtn, animation: forcedHintFor ? 'pulse 1.5s infinite' : 'none'}} onClick={applyHint}>
-                 💡 {forcedHintFor ? 'שחרר נעילה!' : `רמז (${hintsUsedInRound === 0 ? 'חינם' : '-' + globalHintCost})`}
-               </button>
+               <div style={{display: 'flex', justifyContent: 'center', gap: '10px'}}>
+                 <button style={{...styles.hintBtn, animation: forcedHintFor ? 'pulse 1.5s infinite' : 'none'}} onClick={applyHint}>
+                   💡 {forcedHintFor ? 'שחרר נעילה!' : `רמז (${hintsUsedInRound === 0 ? 'חינם' : '-' + globalHintCost})`}
+                 </button>
+                 
+                 {/* כפתור נקה טעויות - מופיע רק אם יש טעויות! */}
+                 {hasMistakes && (
+                   <button style={styles.clearBtn} onClick={handleClearMistakes}>
+                     🧹 נקה טעויות
+                   </button>
+                 )}
+               </div>
             </div>
         </div>
 
@@ -781,15 +810,17 @@ const styles = {
   topSectionFixed: { backgroundColor: '#2f3542', flexShrink: 0, borderBottom: '4px solid #feca57', display: 'flex', flexDirection: 'column' },
   topBar: { color: '#fff', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   hintContainer: { backgroundColor: '#dfe6e9', padding: '10px', textAlign: 'center' },
-  hintBtn: { backgroundColor: '#ff9f43', color: '#fff', border: 'none', padding: '8px 25px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #e67e22', fontSize: '0.9rem' },
+  hintBtn: { backgroundColor: '#ff9f43', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #e67e22', fontSize: '0.9rem' },
   
+  // עיצוב כפתור הניקוי החדש
+  clearBtn: { backgroundColor: '#ff6b6b', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #e55039', fontSize: '0.9rem' },
+
   scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
   smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
   
   boardArea: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', width: '100%', transition: 'all 0.3s ease' },
   board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '15px', maxWidth: '800px', width: '100%' },
   
-  // רווח התיבות שונה ל-4px כדי להשאיר יותר מקום לאותיות עצמן במילים ארוכות
   wordWrapper: { display: 'flex', gap: '4px', direction: 'rtl', flexWrap: 'nowrap' },
   
   letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative', flexShrink: 0 },
