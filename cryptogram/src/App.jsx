@@ -1,23 +1,50 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 
+// אלף-בית עברי מלא כולל סופיות
 const HEBREW_ALPHABET = 'אבגדהוזחטיכלמנסעפצקרשתםןץףך'.split('');
 
 function App() {
+  // --- מצבי אפליקציה ---
   const [appState, setAppState] = useState('menu'); 
   const [showGuestWarning, setShowGuestWarning] = useState(false);
+  const [showWinModal, setShowWinModal] = useState(false);
+  const [noMorePhrases, setNoMorePhrases] = useState(false);
+  const [loading, setLoading] = useState(false);
   
-  // נתוני שחקן
+  // --- נתוני שחקן ---
   const [player, setPlayer] = useState(null);
+  const [score, setScore] = useState(0);
   const [loginName, setLoginName] = useState('');
   const [loginContact, setLoginContact] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // נתוני משחק
+  // --- נתוני משחק ---
   const [currentPhrase, setCurrentPhrase] = useState(null);
   const [cipherMap, setCipherMap] = useState({});
   const [userGuesses, setUserGuesses] = useState({}); 
-  const [selectedNumber, setSelectedNumber] = useState(null); // איזה מספר מסומן עכשיו להקלדה
+  const [selectedNumber, setSelectedNumber] = useState(null);
+  const [correctCiphers, setCorrectCiphers] = useState([]); // מעקב אחרי אותיות שקיבלו כבר נקודה
+
+  // --- פונקציות ניקוד וסנכרון ---
+
+  const syncScoreToDB = async (newScore) => {
+    if (player) {
+      const { error } = await supabase
+        .from('players')
+        .update({ score: newScore })
+        .eq('id', player.id);
+      if (error) console.error("שגיאה בעדכון ניקוד:", error);
+    }
+  };
+
+  const updateScore = (amount) => {
+    setScore(prev => {
+      const newScore = Math.max(0, prev + amount);
+      syncScoreToDB(newScore);
+      return newScore;
+    });
+  };
 
   // --- לוגיקת משחק ---
   
@@ -30,97 +57,123 @@ function App() {
       newCipher[letter] = shuffledNumbers[index];
     });
     newCipher[' '] = ' ';
+    
     setCipherMap(newCipher);
     setUserGuesses({});
     setSelectedNumber(null);
+    setCorrectCiphers([]);
+    setShowWinModal(false);
   };
 
   const fetchRandomPhrase = async () => {
-    const { data, error } = await supabase.from('phrases').select('*').eq('category', 'ילדים');
+    setLoading(true);
+    // כאן בעתיד נוסיף סינון של "משפטים שהשחקן כבר פתר"
+    const { data, error } = await supabase
+      .from('phrases')
+      .select('*')
+      .eq('category', 'ילדים'); // כרגע כברירת מחדל, אפשר לשנות לפי בחירה
+
     if (!error && data && data.length > 0) {
       const randomItem = data[Math.floor(Math.random() * data.length)];
       setCurrentPhrase(randomItem);
       generateCipherMap(randomItem.text);
+      setNoMorePhrases(false);
+    } else {
+      setNoMorePhrases(true);
     }
+    setLoading(false);
   };
 
-  const startGame = () => {
-    setShowGuestWarning(false);
-    setAppState('playing');
-    fetchRandomPhrase();
-  };
+  // בדיקת ניצחון (משפט שלם)
+  useEffect(() => {
+    if (currentPhrase && Object.keys(userGuesses).length > 0) {
+      const isWin = currentPhrase.text.split('').every(char => {
+        if (char === ' ') return true;
+        return userGuesses[cipherMap[char]] === char;
+      });
 
-  // --- לוגיקת התחברות (ללא סיסמה) ---
-  const handleLoginOrRegister = async () => {
-    if (!loginContact.trim()) {
-      setLoginError('חובה להזין מספר טלפון או אימייל');
+      if (isWin && !showWinModal) {
+        setShowWinModal(true);
+        updateScore(5); // בונוס ניצחון
+      }
+    }
+  }, [userGuesses]);
+
+  // רמז - עולה 5 נקודות
+  const getHint = () => {
+    if (score < 5) {
+      alert("צריך לפחות 5 נקודות בשביל רמז!");
       return;
     }
 
-    // נבדוק אם השחקן קיים לפי אימייל/טלפון
-    const { data: existingPlayer, error: fetchError } = await supabase
+    const unGuessedChars = currentPhrase.text.split('').filter(char => {
+      if (char === ' ') return false;
+      return userGuesses[cipherMap[char]] !== char;
+    });
+
+    if (unGuessedChars.length > 0) {
+      const randomChar = unGuessedChars[Math.floor(Math.random() * unGuessedChars.length)];
+      const num = cipherMap[randomChar];
+      handleVirtualKeyPress(randomChar, num);
+      updateScore(-5);
+    }
+  };
+
+  const handleVirtualKeyPress = (letter, forcedNumber = null) => {
+    const targetNumber = forcedNumber || selectedNumber;
+    if (targetNumber !== null) {
+      // בדיקה אם הניחוש נכון בפעם הראשונה כדי לתת נקודה
+      const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetNumber);
+      
+      if (letter === correctLetter && !correctCiphers.includes(targetNumber)) {
+        updateScore(1);
+        setCorrectCiphers(prev => [...prev, targetNumber]);
+      }
+
+      // מעדכן את האות בכל המקומות שבהם מופיע המספר
+      setUserGuesses(prev => ({ ...prev, [targetNumber]: letter }));
+    }
+  };
+
+  // --- התחברות ללא סיסמה ---
+  const handleLoginOrRegister = async () => {
+    if (!loginContact.trim()) {
+      setLoginError('חובה להזין טלפון או אימייל');
+      return;
+    }
+    setLoading(true);
+    const { data: existingPlayer } = await supabase
       .from('players')
       .select('*')
       .eq('contact_info', loginContact.trim())
       .single();
 
     if (existingPlayer) {
-      // השחקן קיים - נחבר אותו
       setPlayer(existingPlayer);
+      setScore(existingPlayer.score || 0);
       setAppState('menu');
-      setLoginError('');
     } else {
-      // שחקן חדש - נוודא שיש שם ונרשום אותו
       if (!loginName.trim()) {
-        setLoginError('לשחקן חדש חובה להזין שם פרטי');
+        setLoginError('שחקן חדש? בבקשה רשום שם פרטי');
+        setLoading(false);
         return;
       }
-      const { data: newPlayer, error: insertError } = await supabase
+      const { data: newP, error } = await supabase
         .from('players')
         .insert([{ first_name: loginName.trim(), contact_info: loginContact.trim(), score: 0 }])
         .select()
         .single();
 
-      if (!insertError) {
-        setPlayer(newPlayer);
+      if (!error) {
+        setPlayer(newP);
+        setScore(0);
         setAppState('menu');
-        setLoginError('');
-      } else {
-        setLoginError('שגיאה בהרשמה, נסה שוב');
       }
     }
+    setLoading(false);
   };
 
-  // --- מקלדת וירטואלית ---
-  const handleVirtualKeyPress = (letter) => {
-    if (selectedNumber !== null) {
-      // מעדכן את האות בכל מקום שבו המספר הזה מופיע!
-      setUserGuesses(prev => ({ ...prev, [selectedNumber]: letter }));
-    }
-  };
-
-  const handleBackspace = () => {
-    if (selectedNumber !== null) {
-      setUserGuesses(prev => {
-        const newGuesses = { ...prev };
-        delete newGuesses[selectedNumber];
-        return newGuesses;
-      });
-    }
-  };
-
-  // תמיכה במקלדת פיזית (למחשב)
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (appState !== 'playing' || selectedNumber === null) return;
-      if (e.key === 'Backspace') handleBackspace();
-      if (/^[א-ת]$/.test(e.key)) handleVirtualKeyPress(e.key);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [appState, selectedNumber]);
-
-  // --- תצוגות ---
+  // --- תצוגות (Screens) ---
 
   if (appState === 'menu') {
     return (
@@ -128,19 +181,23 @@ function App() {
         <div style={styles.card}>
           <h1 style={styles.title}>🌟 מפענחי הצפנים 🌟</h1>
           {player ? (
-            <h3 style={{ color: '#2ecc71' }}>שלום, {player.first_name}! (ניקוד: {player.score})</h3>
+            <div style={styles.welcomeBox}>
+              <h3>היי {player.first_name}! 👋</h3>
+              <div style={styles.scoreBadge}>ניקוד מצטבר: {score}</div>
+            </div>
           ) : (
-            <p style={styles.subtitle}>התחברו כדי לשמור את הניקוד שלכם!</p>
+            <p style={styles.subtitle}>מוכנים לפצח את הקוד?</p>
           )}
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '30px' }}>
+          <div style={styles.menuButtons}>
             {!player && (
-              <button style={styles.primaryBtn} onClick={() => setAppState('login')}>
-                התחברות / הרשמה מהירה
-              </button>
+              <button style={styles.secondaryBtn} onClick={() => setAppState('login')}>התחברות / הרשמה</button>
             )}
-            <button style={player ? styles.primaryBtn : styles.secondaryBtn} onClick={player ? startGame : () => setShowGuestWarning(true)}>
-              {player ? 'שחק עכשיו 🎮' : 'שחק כאורח 🎮'}
+            <button 
+              style={styles.primaryBtn} 
+              onClick={player ? () => { setAppState('playing'); fetchRandomPhrase(); } : () => setShowGuestWarning(true)}
+            >
+              שחק עכשיו 🎮
             </button>
           </div>
         </div>
@@ -148,12 +205,10 @@ function App() {
         {showGuestWarning && (
           <div style={styles.overlay}>
             <div style={styles.modal}>
-              <h2 style={{ color: '#ff6b6b' }}>רגע אחד! ✋</h2>
-              <p>בתור אורח, הניקוד שלך לא יישמר.</p>
-              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                <button style={styles.primaryBtn} onClick={startGame}>שחק בכל זאת</button>
-                <button style={styles.secondaryBtn} onClick={() => setShowGuestWarning(false)}>חזור</button>
-              </div>
+              <h2 style={{color:'#ff6b6b'}}>רגע אחד!</h2>
+              <p>בתור אורח, הניקוד שלך לא יישמר בשרת.</p>
+              <button style={styles.primaryBtn} onClick={() => { setAppState('playing'); fetchRandomPhrase(); setShowGuestWarning(false); }}>שחק בכל זאת</button>
+              <button style={styles.secondaryBtn} onClick={() => setShowGuestWarning(false)}>חזור להרשמה</button>
             </div>
           </div>
         )}
@@ -165,169 +220,142 @@ function App() {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
-          <h2 style={styles.title}>כניסה לשחקנים</h2>
-          <p style={{fontSize: '0.9rem', color: '#666'}}>מזינים טלפון/מייל. אם אתה חדש, הוסף גם שם!</p>
-          
+          <h2 style={styles.title}>כניסה למשחק</h2>
           <input 
-            type="text" placeholder="אימייל או מספר טלפון (חובה)" 
-            value={loginContact} onChange={(e) => setLoginContact(e.target.value)}
+            type="text" placeholder="טלפון או אימייל" 
+            value={loginContact} onChange={(e) => setLoginContact(e.target.value)} 
             style={styles.input} 
           />
           <input 
-            type="text" placeholder="שם פרטי (חובה רק לשחקן חדש)" 
-            value={loginName} onChange={(e) => setLoginName(e.target.value)}
+            type="text" placeholder="שם פרטי (לשחקנים חדשים)" 
+            value={loginName} onChange={(e) => setLoginName(e.target.value)} 
             style={styles.input} 
           />
-          
-          {loginError && <p style={{ color: 'red', margin: '5px 0' }}>{loginError}</p>}
-          
-          <button style={{...styles.primaryBtn, marginTop: '15px'}} onClick={handleLoginOrRegister}>
-            הכנס אותי למשחק!
+          {loginError && <p style={{color:'red', fontSize:'0.9rem'}}>{loginError}</p>}
+          <button style={styles.primaryBtn} onClick={handleLoginOrRegister} disabled={loading}>
+            {loading ? 'מתחבר...' : 'היכנס למשחק'}
           </button>
-          <button style={{...styles.secondaryBtn, marginTop: '10px'}} onClick={() => setAppState('menu')}>
-            ביטול
-          </button>
+          <button style={styles.secondaryBtn} onClick={() => setAppState('menu')}>ביטול</button>
         </div>
       </div>
     );
   }
 
-  if (appState === 'playing' && currentPhrase) {
+  if (appState === 'playing') {
+    if (noMorePhrases) {
+      return (
+        <div style={styles.container}>
+          <div style={styles.card}>
+            <h2 style={styles.title}>🏆 סיימת הכל! 🏆</h2>
+            <p>פתרת את כל הצפנים בקטגוריה הזו.</p>
+            <p>חזור בקרוב, אנחנו מעדכנים משפטים חדשים כל הזמן!</p>
+            <button style={styles.primaryBtn} onClick={() => setAppState('menu')}>חזור לתפריט</button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={styles.containerGame}>
         <div style={styles.topBar}>
-          <h3 style={{ margin: 0, color: '#fff' }}>נושא: {currentPhrase.topic}</h3>
-          <button style={styles.smallBtn} onClick={() => setAppState('menu')}>חזור לתפריט</button>
+          <div style={{fontWeight:'bold'}}>נושא: {currentPhrase?.topic}</div>
+          <div style={styles.scoreDisplay}>✨ {score} נקודות</div>
+          <button style={styles.smallBtn} onClick={() => setAppState('menu')}>תפריט</button>
         </div>
-        
-        {/* הלוח המרכזי */}
+
         <div style={styles.boardArea}>
           <div style={styles.board}>
-            {currentPhrase.text.split('').map((char, index) => {
-              if (char === ' ') return <div key={`space-${index}`} style={{ width: '15px' }}></div>;
+            {currentPhrase?.text.split('').map((char, index) => {
+              if (char === ' ') return <div key={index} style={{ width: '20px' }}></div>;
+              const num = cipherMap[char];
+              const guessed = userGuesses[num] || '';
+              const isSelected = selectedNumber === num;
               
-              const numberForChar = cipherMap[char];
-              const isSelected = selectedNumber === numberForChar;
-              const guessedLetter = userGuesses[numberForChar] || '';
-
               return (
                 <div 
-                  key={`char-${index}`} 
-                  style={{...styles.letterBox, borderColor: isSelected ? '#ff9f43' : '#c8d6e5', backgroundColor: isSelected ? '#fffdf3' : '#fff'}}
-                  onClick={() => setSelectedNumber(numberForChar)}
+                  key={index} 
+                  style={{
+                    ...styles.letterBox, 
+                    borderColor: isSelected ? '#ff9f43' : '#c8d6e5',
+                    backgroundColor: isSelected ? '#fffdf3' : '#fff'
+                  }} 
+                  onClick={() => setSelectedNumber(num)}
                 >
-                  <div style={{...styles.guessedLetter, color: guessedLetter ? '#2f3542' : 'transparent'}}>
-                    {guessedLetter || char} {/* מציג את האות אם נוחשה */}
-                  </div>
-                  <div style={styles.secretNumber}>{numberForChar}</div>
+                  <div style={styles.guessedLetter}>{guessed}</div>
+                  <div style={styles.secretNumber}>{num}</div>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* המקלדת הוירטואלית בתחתית */}
         <div style={styles.keyboardArea}>
+          <div style={{textAlign:'center', marginBottom: '15px'}}>
+             <button style={styles.hintBtn} onClick={getHint}>💡 בקש רמז (-5 נקודות)</button>
+          </div>
+          
           <div style={styles.keyboardRow}>
-            {HEBREW_ALPHABET.slice(0, 10).map(letter => (
-              <button key={letter} style={styles.keyBtn} onClick={() => handleVirtualKeyPress(letter)}>{letter}</button>
+            {HEBREW_ALPHABET.slice(0, 10).map(l => (
+              <button key={l} style={styles.keyBtn} onClick={() => handleVirtualKeyPress(l)}>{l}</button>
             ))}
           </div>
           <div style={styles.keyboardRow}>
-            {HEBREW_ALPHABET.slice(10, 20).map(letter => (
-              <button key={letter} style={styles.keyBtn} onClick={() => handleVirtualKeyPress(letter)}>{letter}</button>
+            {HEBREW_ALPHABET.slice(10, 20).map(l => (
+              <button key={l} style={styles.keyBtn} onClick={() => handleVirtualKeyPress(l)}>{l}</button>
             ))}
           </div>
           <div style={styles.keyboardRow}>
-            <button style={{...styles.keyBtn, backgroundColor: '#ff6b6b', flex: 1.5}} onClick={handleBackspace}>מחק</button>
-            {HEBREW_ALPHABET.slice(20).map(letter => (
-              <button key={letter} style={styles.keyBtn} onClick={() => handleVirtualKeyPress(letter)}>{letter}</button>
+            <button style={{...styles.keyBtn, backgroundColor:'#ff6b6b', color:'#fff', flex: 1.5}} onClick={() => handleVirtualKeyPress('')}>מחק</button>
+            {HEBREW_ALPHABET.slice(20).map(l => (
+              <button key={l} style={styles.keyBtn} onClick={() => handleVirtualKeyPress(l)}>{l}</button>
             ))}
           </div>
-          <button style={{...styles.primaryBtn, marginTop: '15px', borderRadius: '8px', padding: '10px'}} onClick={fetchRandomPhrase}>
-             דלג למילה חדשה 🎲
-          </button>
         </div>
+
+        {showWinModal && (
+          <div style={styles.overlay}>
+            <div style={styles.modal}>
+              <h1 style={{fontSize: '3rem'}}>🎉</h1>
+              <h2 style={{color: '#1dd1a1'}}>כל הכבוד!</h2>
+              <p>פיצחת את הצופן וזכית ב-5 נקודות בונוס!</p>
+              <button style={styles.primaryBtn} onClick={fetchRandomPhrase}>לצופן הבא ➡️</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  return <div style={styles.container}><h2>טוען...</h2></div>;
+  return null;
 }
 
+// --- אובייקט עיצוב מלא ---
 const styles = {
-  container: {
-    display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh',
-    backgroundColor: '#f7f1e3', direction: 'rtl', fontFamily: '"Segoe UI", Tahoma, sans-serif', padding: '20px'
-  },
-  containerGame: {
-    display: 'flex', flexDirection: 'column', height: '100vh',
-    backgroundColor: '#f7f1e3', direction: 'rtl', fontFamily: '"Segoe UI", Tahoma, sans-serif',
-  },
-  card: {
-    backgroundColor: '#ffffff', padding: '40px', borderRadius: '24px',
-    boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '400px',
-  },
-  title: { color: '#ff6b6b', fontSize: '2.5rem', margin: '0 0 10px 0', textShadow: '2px 2px 0px #feca57' },
-  subtitle: { color: '#576574', fontSize: '1.2rem' },
-  primaryBtn: {
-    backgroundColor: '#1dd1a1', color: 'white', border: 'none', padding: '15px',
-    fontSize: '1.2rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', width: '100%',
-  },
-  secondaryBtn: {
-    backgroundColor: '#feca57', color: '#fff', border: 'none', padding: '15px',
-    fontSize: '1.2rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', width: '100%',
-  },
-  smallBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid white', 
-    padding: '5px 10px', borderRadius: '8px', cursor: 'pointer'
-  },
-  input: {
-    width: '100%', padding: '12px', margin: '10px 0', borderRadius: '8px',
-    border: '2px solid #c8d6e5', fontSize: '1.1rem', boxSizing: 'border-box', direction: 'rtl',
-  },
-  topBar: {
-    backgroundColor: '#48dbfb', padding: '15px 20px', display: 'flex', 
-    justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-  },
-  boardArea: {
-    flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', overflowY: 'auto'
-  },
-  board: {
-    display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', maxWidth: '600px'
-  },
-  letterBox: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    width: '45px', height: '60px', backgroundColor: '#fff', borderBottom: '4px solid',
-    borderRadius: '8px 8px 0 0', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-    transition: 'all 0.2s'
-  },
-  guessedLetter: {
-    fontSize: '1.6rem', fontWeight: 'bold', height: '30px'
-  },
-  secretNumber: {
-    fontSize: '1rem', fontWeight: 'bold', color: '#ff9f43', marginTop: '2px'
-  },
-  keyboardArea: {
-    backgroundColor: '#dfe6e9', padding: '15px', borderTop: '2px solid #b2bec3',
-    paddingBottom: 'max(15px, env(safe-area-inset-bottom))' // התאמה לאייפונים
-  },
-  keyboardRow: {
-    display: 'flex', justifyContent: 'center', gap: '5px', marginBottom: '8px'
-  },
-  keyBtn: {
-    flex: 1, maxWidth: '40px', height: '45px', backgroundColor: '#fff',
-    border: 'none', borderRadius: '6px', fontSize: '1.2rem', fontWeight: 'bold',
-    color: '#2d3436', cursor: 'pointer', boxShadow: '0 2px 0px #b2bec3',
-    display: 'flex', justifyContent: 'center', alignItems: 'center'
-  },
-  overlay: {
-    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center',
-  },
-  modal: {
-    backgroundColor: 'white', padding: '30px', borderRadius: '20px', maxWidth: '350px', textAlign: 'center',
-  }
+  container: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '20px', fontFamily: '"Segoe UI", sans-serif' },
+  containerGame: { display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: '#f7f1e3', direction: 'rtl', fontFamily: '"Segoe UI", sans-serif' },
+  card: { backgroundColor: '#fff', padding: '40px', borderRadius: '25px', boxShadow: '0 15px 30px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '400px' },
+  title: { color: '#ff6b6b', fontSize: '2.2rem', marginBottom: '10px', textShadow: '2px 2px 0 #feca57' },
+  subtitle: { color: '#576574', fontSize: '1.2rem', marginBottom: '20px' },
+  welcomeBox: { marginBottom: '20px' },
+  scoreBadge: { backgroundColor: '#feca57', color: '#fff', padding: '8px 20px', borderRadius: '25px', display: 'inline-block', fontWeight: 'bold', fontSize: '1.1rem' },
+  menuButtons: { display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' },
+  primaryBtn: { backgroundColor: '#1dd1a1', color: '#fff', border: 'none', padding: '15px', borderRadius: '15px', fontSize: '1.2rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 5px 0 #10ac84' },
+  secondaryBtn: { backgroundColor: '#48dbfb', color: '#fff', border: 'none', padding: '15px', borderRadius: '15px', fontSize: '1.2rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 5px 0 #2e86de', marginTop: '10px' },
+  hintBtn: { backgroundColor: '#ff9f43', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 0 #e67e22' },
+  input: { width: '100%', padding: '15px', margin: '10px 0', borderRadius: '12px', border: '2px solid #c8d6e5', fontSize: '1.1rem', boxSizing: 'border-box', outline: 'none' },
+  topBar: { backgroundColor: '#2f3542', color: '#fff', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem' },
+  smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '5px 10px', borderRadius: '8px', cursor: 'pointer' },
+  boardArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', overflowY: 'auto' },
+  board: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px', maxWidth: '800px' },
+  letterBox: { width: '45px', height: '65px', backgroundColor: '#fff', borderBottom: '4px solid #54a0ff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: '8px', transition: '0.2s' },
+  guessedLetter: { fontSize: '1.8rem', fontWeight: 'bold', color: '#2f3542', height: '35px' },
+  secretNumber: { fontSize: '1rem', color: '#ff9f43', fontWeight: 'bold' },
+  keyboardArea: { backgroundColor: '#dfe6e9', padding: '15px', borderTop: '2px solid #b2bec3' },
+  keyboardRow: { display: 'flex', justifyContent: 'center', gap: '6px', marginBottom: '8px' },
+  keyBtn: { flex: 1, maxWidth: '42px', height: '48px', backgroundColor: '#fff', border: 'none', borderRadius: '8px', fontSize: '1.3rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 3px 0 #b2bec3', display: 'flex', justifyContent: 'center', alignItems: 'center' },
+  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
+  modal: { backgroundColor: '#fff', padding: '40px', borderRadius: '30px', textAlign: 'center', maxWidth: '350px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }
 };
 
 export default App;
