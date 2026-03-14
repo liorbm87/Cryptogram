@@ -14,6 +14,9 @@ function App() {
   const [noMorePhrases, setNoMorePhrases] = useState(false);
   const [loading, setLoading] = useState(false);
   
+  // --- חסימת מסך אופקי בנייד ---
+  const [isLandscape, setIsLandscape] = useState(false);
+
   // --- הגדרות משחק ---
   const [selectedCategory, setSelectedCategory] = useState('ילדים');
   const [selectedLevel, setSelectedLevel] = useState('easy'); 
@@ -93,6 +96,20 @@ function App() {
   };
 
   useEffect(() => {
+    // בדיקת כיוון מסך למובייל בלבד
+    const checkOrientation = () => {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile && window.innerWidth > window.innerHeight) {
+        setIsLandscape(true);
+      } else {
+        setIsLandscape(false);
+      }
+    };
+
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    checkOrientation();
+
     if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
       setIsAppInstalled(true);
     }
@@ -141,6 +158,8 @@ function App() {
     initApp();
 
     return () => {
+        window.removeEventListener('resize', checkOrientation);
+        window.removeEventListener('orientationchange', checkOrientation);
         window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, []);
@@ -379,7 +398,9 @@ function App() {
 
         if (currentCycle >= 3) {
             currentCycle = 0;
-            triggerAlert = true;
+            if (globalHintCost > 1) {
+              triggerAlert = true;
+            }
             nextCost = 1;
         }
 
@@ -827,6 +848,15 @@ function App() {
     );
   };
 
+  const landscapeOverlay = isLandscape ? (
+    <div style={styles.landscapeOverlay}>
+      <div style={{fontSize: '4rem', marginBottom: '10px'}}>📱</div>
+      <h2 style={{color: '#8CA595', margin: '0 0 10px 0'}}>אופס! מסך מסובב</h2>
+      <p style={{color: '#5C6B5E', fontSize: '1.1rem', margin: '0 0 5px 0', maxWidth: '300px'}}>המשחק מותאם למצב טלפון רגיל (אנכי).</p>
+      <p style={{color: '#7E8B80', fontSize: '0.95rem', margin: 0, maxWidth: '300px'}}>אנא סובבו את המכשיר חזרה כדי להמשיך לשחק.</p>
+    </div>
+  ) : null;
+
   // --- מסכים ---
 
   if (appState === 'admin') {
@@ -836,6 +866,7 @@ function App() {
 
     return (
       <div style={styles.containerFixed}>
+        {landscapeOverlay}
         <div style={{...styles.card, width: '95%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', padding: '20px'}}>
           <h2 style={{color: '#5C6B5E', margin: '0 0 15px 0'}}>ניהול מערכת 🕵️‍♂️</h2>
           <button style={{...styles.secondaryBtn, marginBottom: '15px'}} onClick={() => setAppState('menu')}>חזרה למשחק</button>
@@ -961,6 +992,7 @@ function App() {
   if (appState === 'menu') {
     return (
       <div style={styles.containerFixed}>
+        {landscapeOverlay}
         <div style={styles.card}>
           
           {!isAppInstalled && (
@@ -1036,11 +1068,7 @@ function App() {
           </div>
         </div>
 
-        <div style={styles.footer}>
-          <span style={styles.footerLink} onClick={() => setLegalDoc('terms')}>תנאי שימוש</span> | 
-          <span style={styles.footerLink} onClick={() => setLegalDoc('privacy')}>מדיניות פרטיות</span> | 
-          <span style={styles.footerLink} onClick={() => setLegalDoc('accessibility')}>הצהרת נגישות</span>
-        </div>
+        {renderLegalModal()}
 
         {showIosInstall && (
           <div style={styles.overlay}>
@@ -1086,7 +1114,7 @@ function App() {
 
 💡 רמזים:
 צריכים עזרה? תוכלו להשתמש בזרעים שלכם כדי לקבל רמז. 
-שימו לב: הרמז הראשון בכל קטגוריה ורמה ניתן לכם כמתנה בחינם! לאחר מכן, פירות החכמה דורשים השקעה של זרעים.
+שימו לב: הרמז הראשון בכל קטגוריה ורמה ניתן לכם כמתנה בחינם! לאחר מכן, פירות החכמה דורשים השקעה של זרעים. כל 3 צפנים שתפתרו, מחירי הרמזים יחזרו חזרה לזרע אחד!
 
 🔒 נעילת אותיות:
 אם תטעו יותר מדי פעמים באות מסוימת, התיבה תינעל (🌸). כדי להמשיך, תצטרכו להשתמש ברמז כדי לשחרר את הנעילה בעדינות.
@@ -1165,6 +1193,7 @@ function App() {
   if (appState === 'login') {
     return (
       <div style={styles.containerFixed}>
+        {landscapeOverlay}
         <div style={{
             ...styles.card,
             marginTop: isKeyboardOpen ? '-50px' : '0',
@@ -1201,6 +1230,7 @@ function App() {
     if (noMorePhrases) {
       return (
         <div style={styles.containerFixed}>
+          {landscapeOverlay}
           <div style={styles.card}>
             <h2 style={styles.title}>🌿 סיימתם הכל! 🌿</h2>
             <p style={{color: '#5C6B5E'}}>אין יותר חידות בקטגוריית {selectedCategory} רמת {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}.</p>
@@ -1214,6 +1244,7 @@ function App() {
 
     return (
       <div style={styles.containerFull}>
+        {landscapeOverlay}
         
         {toastMsg && (
           <div style={styles.toast}>
@@ -1424,6 +1455,7 @@ const styles = {
 
   cookieBanner: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', backgroundColor: '#FFFFFF', padding: '20px', borderRadius: '16px', boxShadow: '0 10px 30px rgba(92, 107, 94, 0.15)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' },
   legalModal: { backgroundColor: '#FFFFFF', padding: '25px', borderRadius: '16px', width: '90%', maxWidth: '450px', maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(92, 107, 94, 0.2)' },
+  landscapeOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#F8F5EE', zIndex: 10000, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '20px' },
 
   topSectionFixed: { backgroundColor: '#5C6B5E', flexShrink: 0, borderBottom: '4px solid #8CA595', display: 'flex', flexDirection: 'column' },
   topBar: { color: '#F3F0E9', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
