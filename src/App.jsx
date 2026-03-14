@@ -54,7 +54,7 @@ function App() {
   const [showCookieConsent, setShowCookieConsent] = useState(false);
   const [legalDoc, setLegalDoc] = useState(null); 
 
-  // --- פאנל ניהול נסתר חכם ---
+  // --- פאנל ניהול نסתר ---
   const [showAdminAuth, setShowAdminAuth] = useState(false);
   const [adminPasscode, setAdminPasscode] = useState('');
   const [adminPlayers, setAdminPlayers] = useState([]);
@@ -62,6 +62,9 @@ function App() {
   const [selectedAdminPlayer, setSelectedAdminPlayer] = useState(null);
   const [adminEditingStats, setAdminEditingStats] = useState({});
   const [showLoginHistory, setShowLoginHistory] = useState(false);
+  
+  // הוספנו משתנה כדי להרים את המודאלים כשהמקלדת נפתחת בניהול
+  const [isModalKeyboardOpen, setIsModalKeyboardOpen] = useState(false);
 
   // --- זיכרון הלקוח וקוקיז (Persistence) ---
   useEffect(() => {
@@ -72,6 +75,9 @@ function App() {
       p.saved_progress = p.saved_progress || {};
       p.category_stats = p.category_stats || {};
       setPlayer(p);
+      
+      // עדכון שעת כניסה שקטה ברקע כדי שלא נפספס משתמשים חוזרים
+      updateLoginHistoryInDB(p);
     }
 
     const hasConsented = localStorage.getItem('crypto_cookie_consent');
@@ -79,6 +85,22 @@ function App() {
       setShowCookieConsent(true);
     }
   }, []);
+
+  const updateLoginHistoryInDB = async (p) => {
+    const now = new Date().toISOString();
+    const { data: dbPlayer } = await supabase.from('players').select('login_history, category_stats').eq('id', p.id).single();
+    
+    if (dbPlayer) {
+      const currentHistory = Array.isArray(dbPlayer.login_history) ? dbPlayer.login_history : [];
+      const updatedHistory = [now, ...currentHistory];
+      await supabase.from('players').update({ last_login: now, login_history: updatedHistory }).eq('id', p.id);
+      
+      // מעדכן את הסטייט והלוקאל סטורג כדי שיהיו מסונכרנים
+      const updatedPlayer = { ...p, last_login: now, login_history: updatedHistory, category_stats: dbPlayer.category_stats || {} };
+      setPlayer(updatedPlayer);
+      localStorage.setItem('crypto_player_session', JSON.stringify(updatedPlayer));
+    }
+  };
 
   const acceptCookies = () => {
     localStorage.setItem('crypto_cookie_consent', 'true');
@@ -454,7 +476,7 @@ function App() {
       }
       
       const currentHistory = Array.isArray(existingPlayer.login_history) ? existingPlayer.login_history : (existingPlayer.last_login ? [existingPlayer.last_login] : []);
-      const updatedHistory = [now, ...currentHistory]; // החדש ביותר תמיד בהתחלה
+      const updatedHistory = [now, ...currentHistory]; 
       
       await supabase.from('players').update({ last_login: now, login_history: updatedHistory }).eq('id', existingPlayer.id);
       
@@ -518,7 +540,7 @@ function App() {
     
     if (adminData && adminData.passcode === adminPasscode) {
       const { data } = await supabase.from('players').select('*').order('last_login', { ascending: false, nullsFirst: false });
-      if (data) setAdminPlayers(data); // סופהבייס מחזיר כל שחקן פעם אחת בלבד בגלל מבנה הטבלה
+      if (data) setAdminPlayers(data); 
       setShowAdminAuth(false);
       setAdminPasscode('');
       setAppState('admin');
@@ -534,17 +556,17 @@ function App() {
     const allLevels = ['easy', 'medium', 'hard'];
     const fullStats = {};
     
-    // בונה רשימה של כל הצירופים כדי שתמיד יוצג הכל, גם אם הוא טרם שיחק
+    // בונה רשימה של הכל, ומציג 5 נקודות כברירת מחדל אם טרם שיחק
     allCategories.forEach(c => {
       allLevels.forEach(l => {
         const key = `${c}_${l}`;
-        fullStats[key] = p.category_stats?.[key] || { score: 0, hint_cost: 1, cycle: 0 };
+        fullStats[key] = p.category_stats?.[key] || { score: 5, hint_cost: 1, cycle: 0 };
       });
     });
 
     setSelectedAdminPlayer(p);
     setAdminEditingStats(fullStats);
-    setShowLoginHistory(false); // מאפס תצוגה
+    setShowLoginHistory(false); 
   };
 
   const handleAdminScoreChange = (key, newScore) => {
@@ -646,11 +668,14 @@ function App() {
         </div>
 
         {selectedAdminPlayer && (
-          <div style={styles.overlay}>
+          <div style={{
+            ...styles.overlay, 
+            alignItems: isModalKeyboardOpen ? 'flex-start' : 'center',
+            paddingTop: isModalKeyboardOpen ? '10%' : '0'
+          }}>
             <div style={styles.legalModal}>
               <h3 style={{marginTop: 0}}>{selectedAdminPlayer.first_name} - עריכה</h3>
               
-              {/* כפתור מעבר בין ניקוד לבין היסטוריית כניסות */}
               <button style={{...styles.secondaryBtn, marginBottom: '15px', backgroundColor: '#dfe6e9', color: '#2f3542', boxShadow: 'none'}} onClick={() => setShowLoginHistory(!showLoginHistory)}>
                 {showLoginHistory ? '🔙 חזור לטבלת הניקוד' : '🕒 צפה בכניסות קודמות'}
               </button>
@@ -677,8 +702,11 @@ function App() {
                       <span style={{fontSize: '0.85rem', fontWeight: 'bold'}}>{displayKey}</span>
                       <input 
                         type="number" 
+                        inputMode="numeric"
                         value={data.score} 
                         onChange={(e) => handleAdminScoreChange(key, e.target.value)}
+                        onFocus={() => setIsModalKeyboardOpen(true)}
+                        onBlur={() => setIsModalKeyboardOpen(false)}
                         style={{width: '60px', padding: '5px', borderRadius: '5px', border: '1px solid #ccc', textAlign: 'center'}}
                       />
                     </div>
@@ -770,7 +798,11 @@ function App() {
         )}
 
         {showAdminAuth && (
-          <div style={styles.overlay}>
+          <div style={{
+            ...styles.overlay,
+            alignItems: isModalKeyboardOpen ? 'flex-start' : 'center',
+            paddingTop: isModalKeyboardOpen ? '20%' : '0'
+          }}>
             <div style={styles.modal}>
               <h3 style={{marginTop: 0, color: '#2f3542'}}>אזור ניהול</h3>
               <input 
@@ -778,6 +810,8 @@ function App() {
                 placeholder="הכנס קוד סודי" 
                 value={adminPasscode} 
                 onChange={(e) => setAdminPasscode(e.target.value)} 
+                onFocus={() => setIsModalKeyboardOpen(true)}
+                onBlur={() => setIsModalKeyboardOpen(false)}
                 style={{...styles.input, textAlign: 'center', letterSpacing: '5px'}} 
               />
               <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
@@ -836,9 +870,11 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
+        {/* הוספנו inputMode="text" כדי לנסות לאלץ את המקלדת להיפתח בצורה נכונה */}
         <input 
            ref={inputRef}
            type="text"
+           inputMode="text"
            lang="he"
            dir="rtl"
            value={hiddenInputValue}
@@ -1020,7 +1056,7 @@ const styles = {
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
   checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#1dd1a1', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
   secretNumber: { fontWeight: 'bold' },
-  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
+  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, transition: 'all 0.3s ease' },
   modal: { backgroundColor: '#fff', padding: '30px', borderRadius: '25px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(0,0,0,0.3)' },
 
   adminPlayerCard: { backgroundColor: '#fff', border: '1px solid #dfe6e9', borderRadius: '10px', padding: '10px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }
