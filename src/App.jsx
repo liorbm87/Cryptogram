@@ -54,13 +54,14 @@ function App() {
   const [showCookieConsent, setShowCookieConsent] = useState(false);
   const [legalDoc, setLegalDoc] = useState(null); 
 
-  // --- פאנל ניהול נסתר (חדש!) ---
+  // --- פאנל ניהול נסתר חכם ---
   const [showAdminAuth, setShowAdminAuth] = useState(false);
   const [adminPasscode, setAdminPasscode] = useState('');
   const [adminPlayers, setAdminPlayers] = useState([]);
   const [adminSearch, setAdminSearch] = useState('');
   const [selectedAdminPlayer, setSelectedAdminPlayer] = useState(null);
   const [adminEditingStats, setAdminEditingStats] = useState({});
+  const [showLoginHistory, setShowLoginHistory] = useState(false);
 
   // --- זיכרון הלקוח וקוקיז (Persistence) ---
   useEffect(() => {
@@ -410,7 +411,6 @@ function App() {
     }
   };
 
-  // --- ניקוי טעויות בלבד ---
   const hasMistakes = currentPhrase && Object.entries(userGuesses).some(([numStr, guessedLetter]) => {
     if (!guessedLetter) return false;
     const num = parseInt(numStr, 10);
@@ -432,7 +432,7 @@ function App() {
     });
   };
 
-  // --- אימות מחמיר עם עדכון זמן כניסה ---
+  // --- אימות מחמיר עם הוספת היסטוריית כניסות ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
     const name = loginName.trim();
@@ -443,7 +443,7 @@ function App() {
     if (!name) return setLoginError('חובה להזין שם פרטי!');
 
     setLoading(true); setLoginError('');
-    const now = new Date().toISOString(); // זמן נוכחי לשמירת הכניסה
+    const now = new Date().toISOString(); 
 
     const { data: existingPlayer } = await supabase.from('players').select('*').eq('contact_info', contact).single();
 
@@ -453,13 +453,16 @@ function App() {
         setLoading(false); return;
       }
       
-      // עדכון זמן כניסה אחרון בשרת
-      await supabase.from('players').update({ last_login: now }).eq('id', existingPlayer.id);
+      const currentHistory = Array.isArray(existingPlayer.login_history) ? existingPlayer.login_history : (existingPlayer.last_login ? [existingPlayer.last_login] : []);
+      const updatedHistory = [now, ...currentHistory]; // החדש ביותר תמיד בהתחלה
+      
+      await supabase.from('players').update({ last_login: now, login_history: updatedHistory }).eq('id', existingPlayer.id);
       
       existingPlayer.completed_phrases = existingPlayer.completed_phrases || [];
       existingPlayer.saved_progress = existingPlayer.saved_progress || {};
       existingPlayer.category_stats = existingPlayer.category_stats || {};
       existingPlayer.last_login = now;
+      existingPlayer.login_history = updatedHistory;
       
       setPlayer(existingPlayer); 
       localStorage.setItem('crypto_player_session', JSON.stringify(existingPlayer));
@@ -472,7 +475,8 @@ function App() {
         completed_phrases: [], 
         saved_progress: {}, 
         category_stats: {},
-        last_login: now
+        last_login: now,
+        login_history: [now]
       };
       const { data: newP, error } = await supabase.from('players').insert([newPlayerData]).select().single();
       if (!error) {
@@ -491,7 +495,6 @@ function App() {
     setAppState('menu');
   };
 
-  // הפונקציה המשודרגת: מונעת חיתוך של מילים ארוכות
   const getBoxSize = () => {
     if (!currentPhrase) return 40;
     const len = currentPhrase.text.length;
@@ -508,26 +511,40 @@ function App() {
     return Math.max(16, Math.min(baseSize, maxAllowedSize));
   };
 
-  // --- לוגיקת פאנל הניהול הנסתר (חדש!) ---
+  // --- לוגיקת פאנל הניהול שמושכת קוד מסופהבייס ---
   const handleAdminAuth = async () => {
-    if (adminPasscode === '1411') {
-      setLoading(true);
-      // משיכת כל השחקנים מסודרים לפי זמן כניסה יורד
+    setLoading(true);
+    const { data: adminData } = await supabase.from('admin_settings').select('passcode').eq('id', 1).single();
+    
+    if (adminData && adminData.passcode === adminPasscode) {
       const { data } = await supabase.from('players').select('*').order('last_login', { ascending: false, nullsFirst: false });
-      if (data) setAdminPlayers(data);
+      if (data) setAdminPlayers(data); // סופהבייס מחזיר כל שחקן פעם אחת בלבד בגלל מבנה הטבלה
       setShowAdminAuth(false);
       setAdminPasscode('');
       setAppState('admin');
-      setLoading(false);
     } else {
-      alert('קוד שגוי!');
+      alert('קוד שגוי או תקלה בחיבור לשרת!');
       setAdminPasscode('');
     }
+    setLoading(false);
   };
 
   const openAdminEdit = (p) => {
+    const allCategories = ['ילדים', 'נוער', 'מבוגרים'];
+    const allLevels = ['easy', 'medium', 'hard'];
+    const fullStats = {};
+    
+    // בונה רשימה של כל הצירופים כדי שתמיד יוצג הכל, גם אם הוא טרם שיחק
+    allCategories.forEach(c => {
+      allLevels.forEach(l => {
+        const key = `${c}_${l}`;
+        fullStats[key] = p.category_stats?.[key] || { score: 0, hint_cost: 1, cycle: 0 };
+      });
+    });
+
     setSelectedAdminPlayer(p);
-    setAdminEditingStats(p.category_stats || {});
+    setAdminEditingStats(fullStats);
+    setShowLoginHistory(false); // מאפס תצוגה
   };
 
   const handleAdminScoreChange = (key, newScore) => {
@@ -544,9 +561,8 @@ function App() {
     alert('הניקוד עודכן בהצלחה!');
   };
 
-  // פונקציית עזר להצגת תאריך יפה
   const formatDateTime = (isoString) => {
-    if (!isoString) return 'לא ידוע';
+    if (!isoString) return 'לא נרשמה כניסה';
     const date = new Date(isoString);
     return date.toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
@@ -597,7 +613,6 @@ function App() {
 
   // --- מסכים ---
 
-  // פאנל הניהול הנסתר (Admin Panel)
   if (appState === 'admin') {
     const filteredPlayers = adminPlayers.filter(p => 
       (p.first_name || '').includes(adminSearch) || (p.contact_info || '').includes(adminSearch)
@@ -630,28 +645,50 @@ function App() {
           </div>
         </div>
 
-        {/* מודאל עריכת ניקוד למנהל */}
         {selectedAdminPlayer && (
           <div style={styles.overlay}>
             <div style={styles.legalModal}>
-              <h3 style={{marginTop: 0}}>עריכת ניקוד: {selectedAdminPlayer.first_name}</h3>
-              <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', maxHeight: '40vh', overflowY: 'auto'}}>
-                {Object.keys(adminEditingStats).length === 0 ? <p>הלקוח טרם צבר ניקוד בשום קטגוריה.</p> : null}
-                {Object.entries(adminEditingStats).map(([key, data]) => (
-                  <div key={key} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f2f6', padding: '10px', borderRadius: '8px'}}>
-                    <span style={{fontSize: '0.9rem', fontWeight: 'bold'}}>{key}</span>
-                    <input 
-                      type="number" 
-                      value={data.score} 
-                      onChange={(e) => handleAdminScoreChange(key, e.target.value)}
-                      style={{width: '60px', padding: '5px', borderRadius: '5px', border: '1px solid #ccc', textAlign: 'center'}}
-                    />
-                  </div>
-                ))}
-              </div>
+              <h3 style={{marginTop: 0}}>{selectedAdminPlayer.first_name} - עריכה</h3>
+              
+              {/* כפתור מעבר בין ניקוד לבין היסטוריית כניסות */}
+              <button style={{...styles.secondaryBtn, marginBottom: '15px', backgroundColor: '#dfe6e9', color: '#2f3542', boxShadow: 'none'}} onClick={() => setShowLoginHistory(!showLoginHistory)}>
+                {showLoginHistory ? '🔙 חזור לטבלת הניקוד' : '🕒 צפה בכניסות קודמות'}
+              </button>
+
+              {showLoginHistory ? (
+                <div style={{maxHeight: '40vh', overflowY: 'auto', marginBottom: '20px'}}>
+                  <h4 style={{margin: '0 0 10px 0'}}>היסטוריית התחברויות מלאה:</h4>
+                  {selectedAdminPlayer.login_history && selectedAdminPlayer.login_history.length > 0 ? (
+                    selectedAdminPlayer.login_history.map((time, idx) => (
+                      <div key={idx} style={{padding: '8px', borderBottom: '1px solid #eee', fontSize: '0.9rem', color: '#2f3542'}}>
+                        {formatDateTime(time)}
+                      </div>
+                    ))
+                  ) : (
+                    <p style={{color: '#e17055'}}>אין היסטוריה קודמת למשתמש זה.</p>
+                  )}
+                </div>
+              ) : (
+                <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', maxHeight: '40vh', overflowY: 'auto', paddingRight: '5px'}}>
+                  {Object.entries(adminEditingStats).map(([key, data]) => {
+                    const displayKey = key.replace('easy', 'קל').replace('medium', 'בינוני').replace('hard', 'קשה').replace('_', ' | ');
+                    return (
+                    <div key={key} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f2f6', padding: '10px', borderRadius: '8px'}}>
+                      <span style={{fontSize: '0.85rem', fontWeight: 'bold'}}>{displayKey}</span>
+                      <input 
+                        type="number" 
+                        value={data.score} 
+                        onChange={(e) => handleAdminScoreChange(key, e.target.value)}
+                        style={{width: '60px', padding: '5px', borderRadius: '5px', border: '1px solid #ccc', textAlign: 'center'}}
+                      />
+                    </div>
+                  )})}
+                </div>
+              )}
+              
               <div style={{display: 'flex', gap: '10px'}}>
-                <button style={styles.primaryBtn} onClick={saveAdminEdits}>שמור שינויים</button>
-                <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none'}} onClick={() => setSelectedAdminPlayer(null)}>ביטול</button>
+                {!showLoginHistory && <button style={styles.primaryBtn} onClick={saveAdminEdits}>שמור ניקוד</button>}
+                <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none', flex: 1}} onClick={() => setSelectedAdminPlayer(null)}>סגור</button>
               </div>
             </div>
           </div>
@@ -669,7 +706,7 @@ function App() {
             src="https://i.postimg.cc/MKHZBh1K/1000182904-removebg-preview.png" 
             alt="מפענחי הצפנים" 
             style={{ width: '130px', height: 'auto', margin: '0 auto 10px auto', display: 'block', cursor: 'pointer' }} 
-            onDoubleClick={() => setShowAdminAuth(true)} /* טריגר הניהול הנסתר! */
+            onDoubleClick={() => setShowAdminAuth(true)}
           />
           <h1 style={styles.title}>מפענחי הצפנים</h1>
 
@@ -732,7 +769,6 @@ function App() {
           </div>
         )}
 
-        {/* מודאל הזנת קוד מנהל */}
         {showAdminAuth && (
           <div style={styles.overlay}>
             <div style={styles.modal}>
@@ -745,7 +781,9 @@ function App() {
                 style={{...styles.input, textAlign: 'center', letterSpacing: '5px'}} 
               />
               <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
-                <button style={styles.primaryBtn} onClick={handleAdminAuth}>כניסה</button>
+                <button style={styles.primaryBtn} onClick={handleAdminAuth} disabled={loading}>
+                  {loading ? 'מתחבר...' : 'כניסה'}
+                </button>
                 <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none'}} onClick={() => {setShowAdminAuth(false); setAdminPasscode('');}}>ביטול</button>
               </div>
             </div>
@@ -798,7 +836,6 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
-        {/* lang="he" ו-dir="rtl" מחייבים את המקלדת להיפתח בעברית */}
         <input 
            ref={inputRef}
            type="text"
@@ -986,7 +1023,6 @@ const styles = {
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
   modal: { backgroundColor: '#fff', padding: '30px', borderRadius: '25px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(0,0,0,0.3)' },
 
-  // עיצוב כרטיסיות הלקוחות בפאנל הניהול
   adminPlayerCard: { backgroundColor: '#fff', border: '1px solid #dfe6e9', borderRadius: '10px', padding: '10px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }
 };
 
