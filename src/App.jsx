@@ -47,8 +47,8 @@ function App() {
   const currentKey = `${selectedCategory}_${selectedLevel}`;
   const currentStats = player?.category_stats?.[currentKey] || localStats[currentKey] || { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false };
   const currentScore = currentStats.score;
-  const globalHintCost = currentStats.hint_cost;
-  const wordsInCycle = currentStats.cycle;
+  const globalHintCost = currentStats.hint_cost || 1;
+  const wordsInCycle = currentStats.cycle || 0;
 
   // --- חיבור למקלדת טלפון מובנית ---
   const inputRef = useRef(null);
@@ -313,23 +313,24 @@ function App() {
         setShowWinModal(true);
         const winReward = Math.max(0, 5 - hintsUsedInRound); 
         
-        let currentCycle = wordsInCycle;
+        // תיקון ספירת מחזורי הפתרון לאיפוס המחיר
+        let currentCycle = wordsInCycle + 1;
         let nextCost = globalHintCost;
         let triggerAlert = false;
 
-        if (globalHintCost >= 10) {
-            currentCycle += 1;
-            if (currentCycle >= 3) {
-                currentCycle = 0;
-                nextCost = 1;
+        // כל 3 צפנים זה מתאפס ל-1, לא משנה מה המחיר
+        if (currentCycle >= 3) {
+            currentCycle = 0;
+            if (globalHintCost > 1) {
                 triggerAlert = true;
             }
-        } else {
-            currentCycle = 0;
+            nextCost = 1;
         }
 
         const newScore = Math.max(0, currentScore + winReward);
-        const newStats = { score: newScore, hint_cost: nextCost, cycle: currentCycle };
+        
+        // חובה להעתיק את currentStats כדי לא לדרוס את ה- first_clue_given הקודם!
+        const newStats = { ...currentStats, score: newScore, hint_cost: nextCost, cycle: currentCycle };
 
         if (player) {
           const newCompleted = [...(player.completed_phrases || []), currentPhrase.id];
@@ -355,7 +356,7 @@ function App() {
         }
 
         if (triggerAlert) {
-            showToast('🌿 פתרתם יפה! כעת פירות הרמזים שוב זמינים בקלות.');
+            showToast('🌿 פתרתם 3 צפנים! מחירי הרמזים התאפסו חזרה ל-1.');
         }
       }
     }
@@ -363,7 +364,7 @@ function App() {
 
   const applyHint = () => {
     const isFirstTimeClue = !currentStats.first_clue_given;
-    let cost = isFirstTimeClue ? 0 : globalHintCost;
+    let cost = (hintsUsedInRound === 0 && isFirstTimeClue) ? 0 : globalHintCost;
     
     if (currentScore < cost) {
       showToast(`חסרים לכם מעט זרעים... רמז דורש ${cost} זרעים.`);
@@ -410,6 +411,7 @@ function App() {
     const isFullyInitial = currentPhrase.text.split('').every((c, i) => c === ' ' || cipherMap[c] !== targetNum || initialIndices.includes(i));
     if (isFullyInitial) return; 
 
+    // רק אם המשתמש מנסה להקליד (ולא לקח רמז) נאכוף את הנעילה
     if (forcedHintFor !== null && !isHint) {
         showToast("התיבה ננעלה 🌸 עלינו להשתמש ברמז כדי להמשיך.");
         return;
