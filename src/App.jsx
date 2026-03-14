@@ -1278,3 +1278,27 @@ const styles = {
   topBar: { color: '#F3F0E9', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   hintContainer: { backgroundColor: '#EAE6DB', padding: '10px', textAlign: 'center' },
   hintBtn: { backgroundColor: '#F3D28A', color: '#5C6B5E', border: 'none', padding: '8px 20px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #D4A373', fontSize: '0.9rem' },
+  
+  clearBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '8px 15px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #C4A587', fontSize: '0.9rem' },
+
+  scoreDisplay: { color: '#F3D28A', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
+  smallBtn: { background: 'none', border: '1px solid #F3F0E9', color: '#F3F0E9', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.75rem' },
+  
+  boardArea: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', width: '100%', transition: 'all 0.3s ease' },
+  board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '15px', maxWidth: '800px', width: '100%' },
+  
+  wordWrapper: { display: 'flex', gap: '4px', direction: 'rtl', flexWrap: 'nowrap' },
+  
+  letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '8px', cursor: 'pointer', transition: '0.2s', position: 'relative', flexShrink: 0 },
+  guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
+  checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#8CA595', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
+  secretNumber: { fontWeight: 'normal' },
+  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(92, 107, 94, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, transition: 'all 0.3s ease' },
+  modal: { backgroundColor: '#FFFFFF', padding: '30px', borderRadius: '16px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(92, 107, 94, 0.2)', transition: 'all 0.3s ease' },
+
+  adminPlayerCard: { backgroundColor: '#F3F0E9', border: 'none', borderRadius: '12px', padding: '12px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(92, 107, 94, 0.05)' },
+
+  toast: { position: 'fixed', top: '35%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'rgba(92, 107, 94, 0.95)', color: '#F3F0E9', padding: '15px 25px', borderRadius: '12px', zIndex: 9999, fontWeight: 'normal', boxShadow: '0 10px 25px rgba(92, 107, 94, 0.2)', textAlign: 'center', width: 'max-content', maxWidth: '85%', fontSize: '1rem', lineHeight: '1.4' }
+};
+
+export default App;
