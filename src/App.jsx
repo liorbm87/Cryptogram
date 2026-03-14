@@ -37,6 +37,10 @@ function App() {
   const [hintLimits, setHintLimits] = useState({}); 
   const [forcedHintFor, setForcedHintFor] = useState(null); 
 
+  // --- הודעות קופצות (מניעת ירידת מקלדת) ---
+  const [toastMsg, setToastMsg] = useState('');
+  const [toastTimeout, setToastTimeout] = useState(null);
+
   // --- תוספות למערכת הרמזים הכלכלית ---
   const [localStats, setLocalStats] = useState({});
   const currentKey = `${selectedCategory}_${selectedLevel}`;
@@ -71,10 +75,17 @@ function App() {
   const [showVisitsModal, setShowVisitsModal] = useState(false);
   const [visitStats, setVisitStats] = useState({ today: 0, week: 0, month: 0 });
 
+  // --- פונקציית הודעות (Toast) חכמה ששומרת על הפוקוס ---
+  const showToast = (msg) => {
+    if (toastTimeout) clearTimeout(toastTimeout);
+    setToastMsg(msg);
+    const t = setTimeout(() => setToastMsg(''), 3500);
+    setToastTimeout(t);
+  };
+
   // --- אתחול אפליקציה (קוקיז, סטטיסטיקות, "מה חדש" ומעקב כניסה כללי) ---
   useEffect(() => {
     const initApp = async () => {
-      // 1. שאיבת נתוני לקוח מחובר
       const savedPlayer = localStorage.getItem('crypto_player_session');
       if (savedPlayer) {
         const p = JSON.parse(savedPlayer);
@@ -85,20 +96,17 @@ function App() {
         updateLoginHistoryInDB(p);
       }
 
-      // 2. עוגיות
       const hasConsented = localStorage.getItem('crypto_cookie_consent');
       if (!hasConsented) {
         setShowCookieConsent(true);
       }
 
-      // 3. משיכת הגדרות מהשרת ("מה חדש")
       const { data: settingsData } = await supabase.from('admin_settings').select('whats_new').eq('id', 1).single();
       if (settingsData && settingsData.whats_new) {
         setWhatsNewText(settingsData.whats_new);
         setAdminWhatsNewInput(settingsData.whats_new);
       }
 
-      // 4. מעקב כניסה כללי לאתר (כולל אורחים) - צינון של שעה אחת כדי לא להספים
       const lastGlobalVisit = localStorage.getItem('crypto_global_visit');
       const now = new Date();
       if (!lastGlobalVisit || (now - new Date(lastGlobalVisit)) > 1000 * 60 * 60) {
@@ -168,7 +176,6 @@ function App() {
     updateCategoryStats({ score: Math.max(0, currentScore + amount) });
   };
 
-  // --- מציאת התיבה הפנויה הבאה ---
   const getNextAvailableNumber = (phraseText, cMap, correctList, initIndices, currentNum = null) => {
     if (!phraseText) return null;
     const chars = phraseText.split('');
@@ -194,7 +201,6 @@ function App() {
     return null;
   };
 
-  // --- לוגיקת יצירת משחק ---
   const generateCipherAndStart = (text, loadedProgress = null) => {
     if (loadedProgress) {
       setCipherMap(loadedProgress.cipherMap);
@@ -293,7 +299,6 @@ function App() {
     fetchRandomPhrase();   
   };
 
-  // --- בדיקת ניצחון ולוגיקת ספירת רמזים ---
   useEffect(() => {
     if (currentPhrase && Object.keys(userGuesses).length > 0) {
       const isWin = currentPhrase.text.split('').every((char, index) => {
@@ -351,18 +356,16 @@ function App() {
         }
 
         if (triggerAlert) {
-            setTimeout(() => alert('🎉 פתרת 3 צפנים במחיר המקסימלי! מחירי הרמזים התאפסו חזרה ל-1!'), 400);
+            showToast('🎉 פתרת 3 צפנים במחיר המקסימלי! מחירי הרמזים התאפסו חזרה ל-1!');
         }
       }
     }
   }, [userGuesses]);
 
-  // --- הפעלת רמזים - חושף הכל ולוקח נקודות ---
   const applyHint = () => {
     let cost = hintsUsedInRound === 0 ? 0 : globalHintCost;
     if (currentScore < cost) {
-      alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות. (בעתיד יתווסף כאן כפתור לצפייה בסרטון לנקודות חינם!)`);
-      setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
+      showToast(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות.`);
       return;
     }
 
@@ -371,14 +374,13 @@ function App() {
       const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetToSolve);
       
       setForcedHintFor(null); 
-      
       handleVirtualKeyPress(correctLetter, targetToSolve, true);
       
       const nextCost = hintsUsedInRound > 0 ? Math.min(10, globalHintCost + 1) : globalHintCost;
       updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost });
-      
       setHintsUsedInRound(prev => prev + 1);
-      setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
+      
+      showToast(`התיבה שוחררה בהצלחה!`);
       return;
     }
 
@@ -396,13 +398,10 @@ function App() {
       
       const nextCost = hintsUsedInRound > 0 ? Math.min(10, globalHintCost + 1) : globalHintCost;
       updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost });
-      
       setHintsUsedInRound(prev => prev + 1);
     }
-    setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
   };
 
-  // --- הקלדת אותיות ---
   const handleVirtualKeyPress = (letter, forcedNum = null, isHint = false) => {
     const targetNum = forcedNum || selectedNumber;
     if (targetNum === null) return;
@@ -411,8 +410,7 @@ function App() {
     if (isFullyInitial) return; 
 
     if (forcedHintFor !== null && forcedHintFor !== targetNum) {
-        alert("קודם שחרר את התיבה האדומה הנעולה בעזרת רמז!");
-        setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
+        showToast("קודם שחרר את התיבה האדומה הנעולה בעזרת רמז!");
         return;
     }
 
@@ -440,13 +438,12 @@ function App() {
       const limit = hintLimits[targetNum] || 5;
       const currentStrikes = (strikes[targetNum] || 0) + 1;
 
+      // הודעות מסוג Toast במקום Alert שומרות על המקלדת פתוחה!
       if (currentStrikes === limit - 1) {
-          alert("לא לרמות, ניסיון אחרון לאות הזאת לפני בקשת רמז!");
-          setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
+          showToast("לא לרמות! ניסיון אחרון לפני נעילת האות.");
       } else if (currentStrikes >= limit) {
           setForcedHintFor(targetNum);
-          alert("חרגת ממספר הניסיונות לאות הזו! לחץ על כפתור הרמז כדי לשחרר.");
-          setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
+          showToast("חרגת ממספר הניסיונות! לחץ על 'רמז' כדי לשחרר.");
       }
       
       setStrikes(prev => ({...prev, [targetNum]: currentStrikes}));
@@ -496,10 +493,8 @@ function App() {
       });
       return newGuesses;
     });
-    setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
   };
 
-  // --- אימות מחמיר עם הוספת היסטוריית כניסות מבוקרת ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
     const name = loginName.trim();
@@ -589,7 +584,6 @@ function App() {
     return Math.max(16, Math.min(baseSize, maxAllowedSize));
   };
 
-  // --- לוגיקת פאנל הניהול שמושכת קוד מסופהבייס ומחשבת כניסות ---
   const fetchGlobalVisits = async () => {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -669,10 +663,8 @@ function App() {
   };
 
 
-  // --- תצוגות מודאלים משפטיים ---
   const renderLegalModal = () => {
     if (!legalDoc) return null;
-    
     let title = '';
     let content = '';
 
@@ -716,7 +708,6 @@ function App() {
 
   // --- מסכים ---
 
-  // אזור הניהול
   if (appState === 'admin') {
     const filteredPlayers = adminPlayers.filter(p => 
       (p.first_name || '').includes(adminSearch) || (p.contact_info || '').includes(adminSearch)
@@ -734,7 +725,6 @@ function App() {
             </button>
           </div>
 
-          {/* שדה עדכון "מה חדש" */}
           <div style={{backgroundColor: '#f1f2f6', padding: '10px', borderRadius: '10px', marginBottom: '15px'}}>
             <p style={{margin: '0 0 5px 0', fontWeight: 'bold', textAlign: 'right', fontSize: '0.85rem'}}>עדכון "מה חדש" ללקוחות:</p>
             <textarea 
@@ -771,7 +761,6 @@ function App() {
           </div>
         </div>
 
-        {/* מודאל סטטיסטיקות כניסה */}
         {showVisitsModal && (
           <div style={styles.overlay}>
              <div style={styles.legalModal}>
@@ -787,7 +776,6 @@ function App() {
           </div>
         )}
 
-        {/* מודאל עריכת משתמש */}
         {selectedAdminPlayer && (
           <div style={{
             ...styles.overlay, 
@@ -846,7 +834,6 @@ function App() {
     );
   }
 
-  // תפריט ראשי של הלקוח
   if (appState === 'menu') {
     return (
       <div style={styles.containerFixed}>
@@ -882,7 +869,6 @@ function App() {
           </div>
           <hr style={{margin: '15px 0', opacity: 0.2}} />
           
-          {/* כפתור מה חדש ללקוח */}
           {whatsNewText && whatsNewText.trim() !== '' && (
              <button style={{...styles.primaryBtn, backgroundColor: '#9c88ff', boxShadow: '0 4px 0 #8c7ae6', marginBottom: '15px'}} onClick={() => setShowWhatsNewModal(true)}>
                📣 מה חדש במשחק?
@@ -913,7 +899,6 @@ function App() {
           <span style={styles.footerLink} onClick={() => setLegalDoc('accessibility')}>הצהרת נגישות</span>
         </div>
 
-        {/* מודאל "מה חדש" ללקוח */}
         {showWhatsNewModal && (
           <div style={styles.overlay}>
              <div style={styles.legalModal}>
@@ -958,7 +943,15 @@ function App() {
                 style={{...styles.input, textAlign: 'center', letterSpacing: '5px'}} 
               />
               <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
-                <button style={styles.primaryBtn} onClick={handleAdminAuth} disabled={loading}>
+                {/* כאן בוצע השינוי המבוקש לכפתור כניסת מנהל! onPointerDown מונע ירידת מקלדת */}
+                <button 
+                  style={styles.primaryBtn} 
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    if (!loading) handleAdminAuth();
+                  }}
+                  disabled={loading}
+                >
                   {loading ? 'מתחבר...' : 'כניסה'}
                 </button>
                 <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none'}} onClick={() => {setShowAdminAuth(false); setAdminPasscode('');}}>ביטול</button>
@@ -1033,7 +1026,13 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
-        {/* הגדרות מחמירות להכרחת פתיחת מקלדת בעברית גם במקלדות צד שלישי (SwiftKey/Gboard) */}
+        {/* Toast הודעות שומר על המקלדת פתוחה */}
+        {toastMsg && (
+          <div style={styles.toast}>
+            {toastMsg}
+          </div>
+        )}
+
         <input 
            id="hebrew-input"
            name="hebrew-input"
@@ -1166,7 +1165,6 @@ function App() {
           </div>
         </div>
 
-        {/* --- חלונית הניצחון --- */}
         {showWinModal && (
           <div style={styles.overlay}>
             <div style={styles.modal}>
@@ -1237,7 +1235,10 @@ const styles = {
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, transition: 'all 0.3s ease' },
   modal: { backgroundColor: '#fff', padding: '30px', borderRadius: '25px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(0,0,0,0.3)', transition: 'all 0.3s ease' },
 
-  adminPlayerCard: { backgroundColor: '#fff', border: '1px solid #dfe6e9', borderRadius: '10px', padding: '10px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }
+  adminPlayerCard: { backgroundColor: '#fff', border: '1px solid #dfe6e9', borderRadius: '10px', padding: '10px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' },
+
+  // עיצוב ההודעה הצפה (Toast)
+  toast: { position: 'fixed', top: '35%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'rgba(47, 53, 66, 0.95)', color: '#fff', padding: '15px 25px', borderRadius: '15px', zIndex: 9999, fontWeight: 'bold', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', textAlign: 'center', width: 'max-content', maxWidth: '85%', fontSize: '1rem', lineHeight: '1.4' }
 };
 
 export default App;
