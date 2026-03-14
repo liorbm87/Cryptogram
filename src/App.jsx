@@ -96,7 +96,6 @@ function App() {
   };
 
   useEffect(() => {
-    // בדיקת כיוון מסך למובייל בלבד
     const checkOrientation = () => {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       if (isMobile && window.innerWidth > window.innerHeight) {
@@ -294,8 +293,8 @@ function App() {
     setCipherMap(newCipher);
 
     const textNoSpaces = text.replace(/\s/g, '');
+    const totalLetters = textNoSpaces.length;
     const uniqueChars = [...new Set(textNoSpaces.split(''))];
-    const wordsCount = text.trim().split(/\s+/).length;
     
     const charFrequency = {};
     textNoSpaces.split('').forEach(char => { charFrequency[char] = (charFrequency[char] || 0) + 1; });
@@ -307,10 +306,23 @@ function App() {
     });
     const sortedCharsByFreq = charFreqArr.map(item => item.char);
 
-    let numToReveal = 1; 
-    if (selectedLevel === 'easy') numToReveal = wordsCount >= 2 ? 1 : 2;
-    else if (selectedLevel === 'medium') numToReveal = 1;
-    else if (selectedLevel === 'hard') numToReveal = 1;
+    // לוגיקה חדשה לקבלת כמות האותיות החשופות לפי אורך המשפט:
+    let numToReveal = 1;
+    if (totalLetters <= 3) {
+      numToReveal = 1;
+    } else if (totalLetters <= 7) {
+      numToReveal = 2;
+    } else if (totalLetters <= 10) {
+      numToReveal = 3;
+    } else if (totalLetters <= 12) {
+      numToReveal = 4;
+    } else if (totalLetters <= 15) {
+      numToReveal = 5;
+    } else if (totalLetters <= 19) {
+      numToReveal = 6;
+    } else {
+      numToReveal = 7;
+    }
 
     if (numToReveal >= uniqueChars.length) numToReveal = Math.max(0, uniqueChars.length - 1);
 
@@ -546,6 +558,19 @@ function App() {
               }
           }
       }
+    } else if (e.key && e.key.length === 1) {
+        const engToHebMap = {
+            't':'א', 'c':'ב', 'd':'ג', 's':'ד', 'v':'ה', 'u':'ו', 'z':'ז', 'j':'ח', 
+            'y':'ט', 'h':'י', 'f':'כ', 'k':'ל', 'n':'מ', 'b':'נ', 'x':'ס', 'g':'ע', 
+            'p':'פ', 'm':'צ', 'e':'ק', 'r':'ר', 'a':'ש', ',':'ת', 'l':'ך', 'o':'ם', 
+            'i':'ן', ';':'ף', '.':'ץ'
+        };
+        const char = e.key.toLowerCase();
+        
+        if (engToHebMap[char] && /^[a-z,.;]$/.test(char)) {
+            e.preventDefault();
+            handleVirtualKeyPress(engToHebMap[char]);
+        }
     }
   };
 
@@ -1110,7 +1135,7 @@ function App() {
 הזרעים הם הניקוד שלכם. בכל פעם שאתם פותרים צופן, אתם אוספים זרעים חדשים. זרעים אלו משמשים אתכם לקבלת רמזים ושחרור אותיות "מתקשות".
 
 🌿 נבטים (אותיות):
-האותיות הן כמו נבטים הגדלים מתוך האדמה. חלקן כבר גלויות וחלקן מחכות שתגלו אותן.
+האותיות הן כמו נבטים הגדלים מתוך האדמה. חלקן כבר גלויות וחלקן מחכות שתגלו אותן. (במחשב ניתן להקליד גם אם המקלדת נשארה על אנגלית!)
 
 💡 רמזים:
 צריכים עזרה? תוכלו להשתמש בזרעים שלכם כדי לקבל רמז. 
@@ -1246,6 +1271,14 @@ function App() {
       <div style={styles.containerFull}>
         {landscapeOverlay}
         
+        <style>{`
+          @keyframes focusPulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(163, 196, 188, 0.5); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(163, 196, 188, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(163, 196, 188, 0); }
+          }
+        `}</style>
+        
         {toastMsg && (
           <div style={styles.toast}>
             {toastMsg}
@@ -1329,7 +1362,7 @@ function App() {
           ...styles.boardArea, 
           justifyContent: isKeyboardOpen ? 'flex-start' : 'center',
           paddingTop: isKeyboardOpen ? '10px' : '20px'
-        }} lang="he-IL">
+        }} lang="he-IL" onClick={() => { if (inputRef.current) inputRef.current.focus(); }}>
           <div style={{
             ...styles.board,
             marginTop: isKeyboardOpen ? '0' : 'auto',
@@ -1363,7 +1396,8 @@ function App() {
                         width: `${boxSize}px`, 
                         height: `${boxSize * 1.35}px`, 
                         borderColor, 
-                        backgroundColor: bgColor 
+                        backgroundColor: bgColor,
+                        animation: isSelected ? 'focusPulse 2s infinite' : 'none'
                       }} 
                       onPointerDown={(e) => {
                         e.preventDefault(); 
@@ -1402,7 +1436,7 @@ function App() {
               
               {showCycleResetMsg && (
                  <div style={{color: '#D4A373', fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px'}}>
-                    ✨ פתרתם 3 צפנים ברצף! מחירי הרמזים התאפסו ל-1.
+                    ✨ פתרתם 3 צפנים! מחירי הרמזים התאפסו ל-1.
                  </div>
               )}
               
@@ -1413,7 +1447,10 @@ function App() {
                 </div>
               </div>
 
-              <button style={styles.primaryBtn} onClick={fetchRandomPhrase}>נמשיך במסע 🌿</button>
+              <button style={styles.primaryBtn} onClick={() => {
+                  setShowWinModal(false);
+                  fetchRandomPhrase();
+              }}>נמשיך במסע 🌿</button>
             </div>
           </div>
         )}
