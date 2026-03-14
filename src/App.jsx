@@ -363,15 +363,11 @@ function App() {
 
   const applyHint = () => {
     const isFirstTimeClue = !currentStats.first_clue_given;
-    let cost = (hintsUsedInRound === 0 && isFirstTimeClue) ? 0 : globalHintCost;
+    let cost = isFirstTimeClue ? 0 : globalHintCost;
     
     if (currentScore < cost) {
       showToast(`חסרים לכם מעט זרעים... רמז דורש ${cost} זרעים.`);
       return;
-    }
-
-    if (isFirstTimeClue) {
-        updateCategoryStats({ first_clue_given: true });
     }
 
     if (forcedHintFor !== null) {
@@ -382,7 +378,7 @@ function App() {
       handleVirtualKeyPress(correctLetter, targetToSolve, true);
       
       const nextCost = hintsUsedInRound > 0 ? Math.min(10, globalHintCost + 1) : globalHintCost;
-      updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost });
+      updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
       setHintsUsedInRound(prev => prev + 1);
       
       showToast(`האות נחשפה בעדינות 🍃`);
@@ -402,7 +398,7 @@ function App() {
       handleVirtualKeyPress(randomChar, cipherMap[randomChar], true); 
       
       const nextCost = hintsUsedInRound > 0 ? Math.min(10, globalHintCost + 1) : globalHintCost;
-      updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost });
+      updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
       setHintsUsedInRound(prev => prev + 1);
     }
   };
@@ -414,7 +410,7 @@ function App() {
     const isFullyInitial = currentPhrase.text.split('').every((c, i) => c === ' ' || cipherMap[c] !== targetNum || initialIndices.includes(i));
     if (isFullyInitial) return; 
 
-    if (forcedHintFor !== null) {
+    if (forcedHintFor !== null && !isHint) {
         showToast("התיבה ננעלה 🌸 עלינו להשתמש ברמז כדי להמשיך.");
         return;
     }
@@ -905,9 +901,9 @@ function App() {
                 }
             }}>בואו נשחק 🍃</button>
             
-            <div style={{ display: 'grid', gridTemplateColumns: !player ? '1fr 1fr' : '1fr', gap: '8px', marginTop: '5px' }}>
-              {!player && <button style={styles.halfBtn1} onClick={() => setAppState('login')}>הצטרף/חזור למסע</button>}
-              <button style={styles.halfBtn2} onClick={() => setShowInstructionsModal(true)}>הוראות המשחק 📖</button>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '5px' }}>
+              {!player && <button style={{...styles.halfBtn1, flex: 1}} onClick={() => setAppState('login')}>הצטרף/חזור למסע</button>}
+              <button style={{...styles.halfBtn2, flex: 1, maxWidth: player ? '50%' : 'none'}} onClick={() => setShowInstructionsModal(true)}>הוראות המשחק 📖</button>
             </div>
           </div>
         </div>
@@ -1013,7 +1009,7 @@ function App() {
               <h2 style={{color:'#D4A373', marginTop: 0}}>רגע אחד!</h2>
               <p style={{color: '#5C6B5E', fontSize: '1.1rem', marginBottom: '20px'}}>האתר לא יזכור את הניקוד שלך, עדיף להירשם.</p>
               <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
-                <button style={styles.primaryBtn} onClick={() => { setShowGuestWarning(false); setAppState('login'); }}>הרשמה/התחברות</button>
+                <button style={styles.primaryBtn} onClick={() => { setShowGuestWarning(false); setAppState('login'); }}>הרשמה או התחברות</button>
                 <button style={{...styles.secondaryBtn, backgroundColor: '#F3F0E9', color: '#5C6B5E', boxShadow: 'none'}} onClick={() => { setAppState('playing'); fetchRandomPhrase(); setShowGuestWarning(false); }}>המשך ללא הרשמה</button>
               </div>
             </div>
@@ -1263,14 +1259,14 @@ const styles = {
   primaryBtn: { backgroundColor: '#A3C4BC', color: '#FFFFFF', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #82A29A' },
   secondaryBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #C4A587' },
   
-  halfBtn1: { backgroundColor: '#F3D28A', color: '#5C6B5E', border: 'none', padding: '10px', borderRadius: '12px', fontSize: '0.95rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #D4A373' },
-  halfBtn2: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '10px', borderRadius: '12px', fontSize: '0.95rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #C4A587' },
+  halfBtn1: { backgroundColor: '#EAD196', color: '#5C6B5E', border: 'none', padding: '10px', borderRadius: '12px', fontSize: '0.95rem', cursor: 'pointer', fontWeight: 'bold', flex: 1, boxShadow: '0 4px 0 #D1B87D' },
+  halfBtn2: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '10px', borderRadius: '12px', fontSize: '0.95rem', cursor: 'pointer', fontWeight: 'bold', flex: 1, boxShadow: '0 4px 0 #C4A587' },
   
   input: { width: '100%', padding: '12px', margin: '8px 0', borderRadius: '12px', border: '1px solid #D5D0C5', fontSize: '1rem', boxSizing: 'border-box', outline: 'none', backgroundColor: '#FCFAEB', color: '#5C6B5E' },
   
   miniGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '15px' },
   miniBtn: { backgroundColor: '#F3F0E9', color: '#5C6B5E', border: '1px solid #D5D0C5', padding: '6px 4px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' },
-  payboxLightBlue: { backgroundColor: '#48dbfb', color: '#fff', border: 'none', padding: '6px 4px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 3px 0 #0abde3' },
+  payboxLightBlue: { backgroundColor: '#54a0ff', color: '#fff', border: 'none', padding: '6px 4px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 3px 0 #2e86de' },
 
   footer: { position: 'absolute', bottom: '15px', display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#A3B1A6' },
   footerLink: { cursor: 'pointer', textDecoration: 'underline' },
@@ -1282,27 +1278,3 @@ const styles = {
   topBar: { color: '#F3F0E9', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   hintContainer: { backgroundColor: '#EAE6DB', padding: '10px', textAlign: 'center' },
   hintBtn: { backgroundColor: '#F3D28A', color: '#5C6B5E', border: 'none', padding: '8px 20px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #D4A373', fontSize: '0.9rem' },
-  
-  clearBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '8px 15px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #C4A587', fontSize: '0.9rem' },
-
-  scoreDisplay: { color: '#F3D28A', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
-  smallBtn: { background: 'none', border: '1px solid #F3F0E9', color: '#F3F0E9', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.75rem' },
-  
-  boardArea: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', width: '100%', transition: 'all 0.3s ease' },
-  board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '15px', maxWidth: '800px', width: '100%' },
-  
-  wordWrapper: { display: 'flex', gap: '4px', direction: 'rtl', flexWrap: 'nowrap' },
-  
-  letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '8px', cursor: 'pointer', transition: '0.2s', position: 'relative', flexShrink: 0 },
-  guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
-  checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#8CA595', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
-  secretNumber: { fontWeight: 'normal' },
-  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(92, 107, 94, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, transition: 'all 0.3s ease' },
-  modal: { backgroundColor: '#FFFFFF', padding: '30px', borderRadius: '16px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(92, 107, 94, 0.2)', transition: 'all 0.3s ease' },
-
-  adminPlayerCard: { backgroundColor: '#F3F0E9', border: 'none', borderRadius: '12px', padding: '12px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(92, 107, 94, 0.05)' },
-
-  toast: { position: 'fixed', top: '35%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'rgba(92, 107, 94, 0.95)', color: '#F3F0E9', padding: '15px 25px', borderRadius: '12px', zIndex: 9999, fontWeight: 'normal', boxShadow: '0 10px 25px rgba(92, 107, 94, 0.2)', textAlign: 'center', width: 'max-content', maxWidth: '85%', fontSize: '1rem', lineHeight: '1.4' }
-};
-
-export default App;
