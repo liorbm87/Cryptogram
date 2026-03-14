@@ -488,7 +488,7 @@ function App() {
     });
   };
 
-  // --- אימות מחמיר עם הוספת היסטוריית כניסות ---
+  // --- אימות מחמיר עם הוספת היסטוריית כניסות מבוקרת ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
     const name = loginName.trim();
@@ -513,6 +513,7 @@ function App() {
       const currentHistory = Array.isArray(existingPlayer.login_history) ? existingPlayer.login_history : (existingPlayer.last_login ? [existingPlayer.last_login] : []);
       let shouldAddToHistory = true;
 
+      // בדיקת צינון של 15 דקות
       if (currentHistory.length > 0) {
         const lastEntryTime = new Date(currentHistory[0]);
         const diffInMinutes = (now - lastEntryTime) / (1000 * 60);
@@ -1022,6 +1023,7 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
+        {/* הוספנו inputMode="text" כדי לאלץ מקלדת אותיות, בשילוב עם lang ו-dir לעברית */}
         <input 
            ref={inputRef}
            type="text"
@@ -1148,12 +1150,22 @@ function App() {
           </div>
         </div>
 
+        {/* --- חלונית הניצחון עם המילה המודגשת --- */}
         {showWinModal && (
           <div style={styles.overlay}>
             <div style={styles.modal}>
               <h1 style={{fontSize: '3rem', margin: 0}}>🎉</h1>
               <h2 style={{color: '#1dd1a1'}}>כל הכבוד!</h2>
-              <p>פיצחת וזכית ב-{Math.max(0, 5 - hintsUsedInRound)} נקודות!</p>
+              <p style={{marginBottom: '5px'}}>פיצחת וזכית ב-{Math.max(0, 5 - hintsUsedInRound)} נקודות!</p>
+              
+              {/* הקופסה החדשה שמציגה את המילה/משפט שפוענחו */}
+              <div style={{backgroundColor: '#f1f2f6', padding: '15px', borderRadius: '12px', margin: '15px 0', border: '2px dashed #1dd1a1'}}>
+                <span style={{fontSize: '0.85rem', color: '#576574'}}>המשפט שפיצחת:</span>
+                <div style={{fontSize: '1.4rem', fontWeight: 'bold', color: '#2f3542', marginTop: '5px'}}>
+                  {currentPhrase?.text}
+                </div>
+              </div>
+
               <button style={styles.primaryBtn} onClick={fetchRandomPhrase}>לצופן הבא ➡️</button>
             </div>
           </div>
