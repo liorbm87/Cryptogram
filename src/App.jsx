@@ -362,7 +362,6 @@ function App() {
   }, [userGuesses]);
 
   const applyHint = () => {
-    // לוגיקת רמז חינם רק למשחק הראשון אי פעם בקטגוריה ורמה
     const isFirstTimeClue = !currentStats.first_clue_given;
     let cost = (hintsUsedInRound === 0 && isFirstTimeClue) ? 0 : globalHintCost;
     
@@ -878,7 +877,7 @@ function App() {
           
           <div style={styles.miniGrid}>
              <button style={styles.miniBtn} onClick={() => setShowWhatsNewModal(true)}>מה חדש</button>
-             <button style={styles.miniBtn} onClick={() => window.open('https://links.payboxapp.com/Sp7UM53Yu1b', '_blank')}>תחזוק המשחק</button>
+             <button style={styles.payboxLightBlue} onClick={() => window.open('https://links.payboxapp.com/Sp7UM53Yu1b', '_blank')}>💸 תחזוק המשחק</button>
              {player && <button style={styles.miniBtn} onClick={handleLogout}>להתנתק?</button>}
           </div>
 
@@ -897,9 +896,19 @@ function App() {
           </div>
 
           <div style={styles.menuButtons}>
-            {!player && <button style={styles.secondaryBtn} onClick={() => setAppState('login')}>הצטרפות למסע</button>}
-            <button style={styles.primaryBtn} onClick={() => { setAppState('playing'); fetchRandomPhrase(); }}>בואו נשחק 🍃</button>
-            <button style={{...styles.secondaryBtn, backgroundColor: '#A3C4BC', boxShadow: '0 4px 0 #82A29A', marginTop: '5px'}} onClick={() => setShowInstructionsModal(true)}>הוראות המשחק 📖</button>
+            <button style={styles.primaryBtn} onClick={() => { 
+                if (!player) {
+                  setShowGuestWarning(true);
+                } else {
+                  setAppState('playing'); 
+                  fetchRandomPhrase(); 
+                }
+            }}>בואו נשחק 🍃</button>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: !player ? '1fr 1fr' : '1fr', gap: '8px', marginTop: '5px' }}>
+              {!player && <button style={styles.halfBtn1} onClick={() => setAppState('login')}>הצטרף/חזור למסע</button>}
+              <button style={styles.halfBtn2} onClick={() => setShowInstructionsModal(true)}>הוראות המשחק 📖</button>
+            </div>
           </div>
         </div>
 
@@ -999,11 +1008,16 @@ function App() {
         )}
 
         {showGuestWarning && (
-          <div style={styles.overlay}><div style={styles.modal}>
-            <h2 style={{color:'#D4A373'}}>רגע אחד!</h2><p style={{color: '#5C6B5E'}}>אורחים לא יכולים לאסוף זרעים לעתיד.</p>
-            <button style={styles.primaryBtn} onClick={() => { setAppState('playing'); fetchRandomPhrase(); setShowGuestWarning(false); }}>נשחק בכל זאת</button>
-            <button style={{...styles.secondaryBtn, backgroundColor: '#F3F0E9', color: '#5C6B5E', boxShadow: 'none', marginTop: '10px'}} onClick={() => setShowGuestWarning(false)}>חזרה להרשמה</button>
-          </div></div>
+          <div style={styles.overlay}>
+            <div style={styles.modal}>
+              <h2 style={{color:'#D4A373', marginTop: 0}}>רגע אחד!</h2>
+              <p style={{color: '#5C6B5E', fontSize: '1.1rem', marginBottom: '20px'}}>האתר לא יזכור את הניקוד שלך, עדיף להירשם.</p>
+              <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                <button style={styles.primaryBtn} onClick={() => { setShowGuestWarning(false); setAppState('login'); }}>הרשמה/התחברות</button>
+                <button style={{...styles.secondaryBtn, backgroundColor: '#F3F0E9', color: '#5C6B5E', boxShadow: 'none'}} onClick={() => { setAppState('playing'); fetchRandomPhrase(); setShowGuestWarning(false); }}>המשך ללא הרשמה</button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     );
@@ -1029,7 +1043,7 @@ function App() {
           />
           <input 
             type="text" 
-            placeholder="טלפון או אימייל להתקשרות" 
+            placeholder="טלפון או אימייל" 
             value={loginContact} 
             onChange={(e) => setLoginContact(e.target.value)} 
             onFocus={() => setIsKeyboardOpen(true)}
@@ -1096,10 +1110,10 @@ function App() {
               </div>
               
               <button 
-                style={{...styles.miniBtn, backgroundColor: '#D4A373', fontSize: '0.7rem', margin: '0 10px', padding: '5px 8px', boxShadow: 'none'}} 
+                style={{...styles.payboxLightBlue, fontSize: '0.75rem', margin: '0 10px', padding: '5px 8px'}} 
                 onClick={() => window.open('https://links.payboxapp.com/Sp7UM53Yu1b', '_blank')}
               >
-                תחזוק המשחק
+                💸 תחזוק המשחק
               </button>
 
               <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
@@ -1248,10 +1262,15 @@ const styles = {
   menuButtons: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' },
   primaryBtn: { backgroundColor: '#A3C4BC', color: '#FFFFFF', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #82A29A' },
   secondaryBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #C4A587' },
+  
+  halfBtn1: { backgroundColor: '#F3D28A', color: '#5C6B5E', border: 'none', padding: '10px', borderRadius: '12px', fontSize: '0.95rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #D4A373' },
+  halfBtn2: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '10px', borderRadius: '12px', fontSize: '0.95rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #C4A587' },
+  
   input: { width: '100%', padding: '12px', margin: '8px 0', borderRadius: '12px', border: '1px solid #D5D0C5', fontSize: '1rem', boxSizing: 'border-box', outline: 'none', backgroundColor: '#FCFAEB', color: '#5C6B5E' },
   
   miniGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '15px' },
   miniBtn: { backgroundColor: '#F3F0E9', color: '#5C6B5E', border: '1px solid #D5D0C5', padding: '6px 4px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' },
+  payboxLightBlue: { backgroundColor: '#48dbfb', color: '#fff', border: 'none', padding: '6px 4px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 3px 0 #0abde3' },
 
   footer: { position: 'absolute', bottom: '15px', display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#A3B1A6' },
   footerLink: { cursor: 'pointer', textDecoration: 'underline' },
