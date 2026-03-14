@@ -10,6 +10,7 @@ function App() {
   const [showGuestWarning, setShowGuestWarning] = useState(false);
   const [showWinModal, setShowWinModal] = useState(false);
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+  const [showCycleResetMsg, setShowCycleResetMsg] = useState(false);
   const [noMorePhrases, setNoMorePhrases] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -232,7 +233,13 @@ function App() {
     const charFrequency = {};
     textNoSpaces.split('').forEach(char => { charFrequency[char] = (charFrequency[char] || 0) + 1; });
     
-    const sortedCharsByFreq = uniqueChars.sort((a, b) => charFrequency[b] - charFrequency[a]);
+    // שובר שוויון אקראי: אם שתי אותיות מופיעות אותו מספר פעמים, הסדר ביניהן יהיה מקרי
+    const charFreqArr = uniqueChars.map(char => ({ char, freq: charFrequency[char], rand: Math.random() }));
+    charFreqArr.sort((a, b) => {
+        if (b.freq !== a.freq) return b.freq - a.freq;
+        return a.rand - b.rand;
+    });
+    const sortedCharsByFreq = charFreqArr.map(item => item.char);
 
     let numToReveal = 1; 
     if (selectedLevel === 'easy') numToReveal = wordsCount >= 2 ? 1 : 2;
@@ -313,23 +320,20 @@ function App() {
         setShowWinModal(true);
         const winReward = Math.max(0, 5 - hintsUsedInRound); 
         
-        // תיקון ספירת מחזורי הפתרון לאיפוס המחיר
         let currentCycle = wordsInCycle + 1;
         let nextCost = globalHintCost;
         let triggerAlert = false;
 
-        // כל 3 צפנים זה מתאפס ל-1, לא משנה מה המחיר
+        // מתאפס בכל 3 פתרונות, לא משנה מה המחיר הנוכחי
         if (currentCycle >= 3) {
             currentCycle = 0;
-            if (globalHintCost > 1) {
-                triggerAlert = true;
-            }
+            triggerAlert = true;
             nextCost = 1;
         }
 
+        setShowCycleResetMsg(triggerAlert);
+
         const newScore = Math.max(0, currentScore + winReward);
-        
-        // חובה להעתיק את currentStats כדי לא לדרוס את ה- first_clue_given הקודם!
         const newStats = { ...currentStats, score: newScore, hint_cost: nextCost, cycle: currentCycle };
 
         if (player) {
@@ -354,10 +358,6 @@ function App() {
         } else {
           setLocalStats(prev => ({ ...prev, [currentKey]: newStats }));
         }
-
-        if (triggerAlert) {
-            showToast('🌿 פתרתם 3 צפנים! מחירי הרמזים התאפסו חזרה ל-1.');
-        }
       }
     }
   }, [userGuesses]);
@@ -369,6 +369,10 @@ function App() {
     if (currentScore < cost) {
       showToast(`חסרים לכם מעט זרעים... רמז דורש ${cost} זרעים.`);
       return;
+    }
+
+    if (isFirstTimeClue) {
+        updateCategoryStats({ first_clue_given: true });
     }
 
     if (forcedHintFor !== null) {
@@ -411,7 +415,6 @@ function App() {
     const isFullyInitial = currentPhrase.text.split('').every((c, i) => c === ' ' || cipherMap[c] !== targetNum || initialIndices.includes(i));
     if (isFullyInitial) return; 
 
-    // רק אם המשתמש מנסה להקליד (ולא לקח רמז) נאכוף את הנעילה
     if (forcedHintFor !== null && !isHint) {
         showToast("התיבה ננעלה 🌸 עלינו להשתמש ברמז כדי להמשיך.");
         return;
@@ -875,7 +878,7 @@ function App() {
           
           <div style={styles.miniGrid}>
              <button style={styles.miniBtn} onClick={() => setShowWhatsNewModal(true)}>מה חדש</button>
-             <button style={styles.payboxLightBlue} onClick={() => window.open('https://links.payboxapp.com/Sp7UM53Yu1b', '_blank')}>💸 תחזוק המשחק</button>
+             <button style={styles.payboxLightBlue} onClick={() => window.open('https://links.payboxapp.com/Sp7UM53Yu1b', '_blank')}>💸 תחזוק</button>
              {player && <button style={styles.miniBtn} onClick={handleLogout}>להתנתק?</button>}
           </div>
 
@@ -1226,6 +1229,12 @@ function App() {
               <h1 style={{fontSize: '3rem', margin: 0}}>🌾</h1>
               <h2 style={{color: '#8CA595'}}>נפלא מאוד!</h2>
               <p style={{marginBottom: '5px', color: '#5C6B5E'}}>גיליתם את הצופן ואספתם {Math.max(0, 5 - hintsUsedInRound)} זרעים!</p>
+              
+              {showCycleResetMsg && (
+                 <div style={{color: '#D4A373', fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px'}}>
+                    ✨ פתרתם 3 צפנים ברצף! מחירי הרמזים התאפסו ל-1.
+                 </div>
+              )}
               
               <div style={{backgroundColor: '#F3F0E9', padding: '15px', borderRadius: '12px', margin: '15px 0', border: '2px dashed #A3C4BC'}}>
                 <span style={{fontSize: '0.85rem', color: '#7E8B80'}}>הנה מה שהסתתר שם:</span>
