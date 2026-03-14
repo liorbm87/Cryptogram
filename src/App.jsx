@@ -356,7 +356,7 @@ function App() {
         }
 
         if (triggerAlert) {
-            showToast('🎉 פתרת 3 צפנים במחיר המקסימלי! מחירי הרמזים התאפסו חזרה ל-1!');
+            showToast('🌿 פתרתם יפה! כעת פירות הרמזים שוב זמינים בקלות.');
         }
       }
     }
@@ -365,7 +365,7 @@ function App() {
   const applyHint = () => {
     let cost = hintsUsedInRound === 0 ? 0 : globalHintCost;
     if (currentScore < cost) {
-      showToast(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות.`);
+      showToast(`חסרים לכם מעט זרעים... רמז דורש ${cost} זרעים.`);
       return;
     }
 
@@ -380,7 +380,7 @@ function App() {
       updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost });
       setHintsUsedInRound(prev => prev + 1);
       
-      showToast(`התיבה שוחררה בהצלחה!`);
+      showToast(`האות נחשפה בעדינות 🍃`);
       return;
     }
 
@@ -409,8 +409,9 @@ function App() {
     const isFullyInitial = currentPhrase.text.split('').every((c, i) => c === ' ' || cipherMap[c] !== targetNum || initialIndices.includes(i));
     if (isFullyInitial) return; 
 
-    if (forcedHintFor !== null && forcedHintFor !== targetNum) {
-        showToast("קודם שחרר את התיבה האדומה הנעולה בעזרת רמז!");
+    // אם התיבה נעולה, חוסם כל הקלדה בכל הלוח עד שיקחו רמז
+    if (forcedHintFor !== null) {
+        showToast("התיבה ננעלה 🌸 עלינו להשתמש ברמז כדי להמשיך.");
         return;
     }
 
@@ -438,12 +439,12 @@ function App() {
       const limit = hintLimits[targetNum] || 5;
       const currentStrikes = (strikes[targetNum] || 0) + 1;
 
-      // הודעות מסוג Toast במקום Alert שומרות על המקלדת פתוחה!
+      // הודעות אנתרופוסופיות עדינות ומדויקות
       if (currentStrikes === limit - 1) {
-          showToast("לא לרמות! ניסיון אחרון לפני נעילת האות.");
+          showToast("זהו ניסיון אחרון... אולי כדאי לחשוב שוב?");
       } else if (currentStrikes >= limit) {
           setForcedHintFor(targetNum);
-          showToast("חרגת ממספר הניסיונות! לחץ על 'רמז' כדי לשחרר.");
+          showToast("נראה שהאות הזו קצת מקשה עלינו... בואו נבקש רמז.");
       }
       
       setStrikes(prev => ({...prev, [targetNum]: currentStrikes}));
@@ -501,8 +502,8 @@ function App() {
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
     const isPhone = /^\d{9,10}$/.test(contact.replace(/-/g, ''));
 
-    if (!isEmail && !isPhone) return setLoginError('נא להזין אימייל תקין או מספר טלפון (9-10 ספרות).');
-    if (!name) return setLoginError('חובה להזין שם פרטי!');
+    if (!isEmail && !isPhone) return setLoginError('אנא הזינו אימייל תקין או מספר טלפון (9-10 ספרות).');
+    if (!name) return setLoginError('חובה להזין שם פרטי.');
 
     setLoading(true); setLoginError('');
     const now = new Date(); 
@@ -696,11 +697,11 @@ function App() {
     return (
       <div style={styles.overlay}>
         <div style={styles.legalModal}>
-          <h2 style={{color: '#2f3542', marginTop: 0}}>{title}</h2>
-          <div style={{textAlign: 'right', whiteSpace: 'pre-line', lineHeight: '1.6', color: '#576574', marginBottom: '20px', fontSize: '0.95rem'}}>
+          <h2 style={{color: '#5C6B5E', marginTop: 0}}>{title}</h2>
+          <div style={{textAlign: 'right', whiteSpace: 'pre-line', lineHeight: '1.6', color: '#7E8B80', marginBottom: '20px', fontSize: '0.95rem'}}>
             {content}
           </div>
-          <button style={styles.primaryBtn} onClick={() => setLegalDoc(null)}>סגור והבנתי</button>
+          <button style={styles.primaryBtn} onClick={() => setLegalDoc(null)}>הבנתי, תודה</button>
         </div>
       </div>
     );
@@ -716,26 +717,26 @@ function App() {
     return (
       <div style={styles.containerFixed}>
         <div style={{...styles.card, width: '95%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', padding: '20px'}}>
-          <h2 style={{color: '#2f3542', margin: '0 0 15px 0'}}>ניהול מערכת 🕵️‍♂️</h2>
-          <button style={{...styles.secondaryBtn, marginBottom: '15px'}} onClick={() => setAppState('menu')}>חזור לתפריט</button>
+          <h2 style={{color: '#5C6B5E', margin: '0 0 15px 0'}}>ניהול מערכת 🕵️‍♂️</h2>
+          <button style={{...styles.secondaryBtn, marginBottom: '15px'}} onClick={() => setAppState('menu')}>חזרה למשחק</button>
           
           <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
-            <button style={{...styles.primaryBtn, flex: 1, backgroundColor: '#9c88ff', boxShadow: '0 4px 0 #8c7ae6'}} onClick={() => setShowVisitsModal(true)}>
+            <button style={{...styles.primaryBtn, flex: 1, backgroundColor: '#D4A373', boxShadow: '0 4px 0 #B58A5D'}} onClick={() => setShowVisitsModal(true)}>
               📊 כניסות לאתר היום: {visitStats.today}
             </button>
           </div>
 
-          <div style={{backgroundColor: '#f1f2f6', padding: '10px', borderRadius: '10px', marginBottom: '15px'}}>
-            <p style={{margin: '0 0 5px 0', fontWeight: 'bold', textAlign: 'right', fontSize: '0.85rem'}}>עדכון "מה חדש" ללקוחות:</p>
+          <div style={{backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', marginBottom: '15px'}}>
+            <p style={{margin: '0 0 5px 0', fontWeight: 'bold', textAlign: 'right', fontSize: '0.85rem', color: '#5C6B5E'}}>עדכון "מה חדש" ללקוחות:</p>
             <textarea 
               value={adminWhatsNewInput} 
               onChange={(e) => setAdminWhatsNewInput(e.target.value)}
               onFocus={() => setIsModalKeyboardOpen(true)}
               onBlur={() => setIsModalKeyboardOpen(false)}
-              placeholder="כתוב כאן על עדכונים חדשים... השאר ריק כדי להעלים את הכפתור מהלקוחות."
+              placeholder="כתבו כאן על התחדשויות... השאירו ריק כדי להסתיר."
               style={{...styles.input, minHeight: '80px', resize: 'none', marginBottom: '5px'}}
             />
-            <button style={{...styles.primaryBtn, padding: '8px', fontSize: '0.9rem'}} onClick={saveAdminWhatsNew}>שמור הודעה</button>
+            <button style={{...styles.primaryBtn, padding: '8px', fontSize: '0.9rem'}} onClick={saveAdminWhatsNew}>שמירת הודעה</button>
           </div>
           
           <input 
@@ -751,9 +752,9 @@ function App() {
           <div style={{marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: isModalKeyboardOpen ? '200px' : '0'}}>
             {filteredPlayers.map(p => (
               <div key={p.id} style={styles.adminPlayerCard} onClick={() => openAdminEdit(p)}>
-                <div style={{fontWeight: 'bold', color: '#2f3542'}}>{p.first_name}</div>
-                <div style={{fontSize: '0.85rem', color: '#576574'}}>{p.contact_info}</div>
-                <div style={{fontSize: '0.75rem', color: '#a4b0be', marginTop: '5px'}}>
+                <div style={{fontWeight: 'bold', color: '#5C6B5E'}}>{p.first_name}</div>
+                <div style={{fontSize: '0.85rem', color: '#7E8B80'}}>{p.contact_info}</div>
+                <div style={{fontSize: '0.75rem', color: '#A3B1A6', marginTop: '5px'}}>
                   כניסה אחרונה: {formatDateTime(p.last_login)}
                 </div>
               </div>
@@ -764,14 +765,14 @@ function App() {
         {showVisitsModal && (
           <div style={styles.overlay}>
              <div style={styles.legalModal}>
-                <h3 style={{marginTop: 0, color: '#2f3542'}}>📊 סטטיסטיקות כניסה לאתר</h3>
-                <p style={{fontSize: '0.85rem', color: '#576574'}}>המונה כולל את כלל הנכנסים לאתר (כולל כאלו שלא נרשמו או שיחקו).</p>
+                <h3 style={{marginTop: 0, color: '#5C6B5E'}}>📊 סטטיסטיקות כניסה לאתר</h3>
+                <p style={{fontSize: '0.85rem', color: '#7E8B80'}}>המונה כולל את כלל הנכנסים לאתר (כולל אורחים).</p>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '15px', margin: '20px 0'}}>
-                   <div style={{backgroundColor: '#f1f2f6', padding: '15px', borderRadius: '10px', fontSize: '1.2rem'}}><strong>היום:</strong> {visitStats.today}</div>
-                   <div style={{backgroundColor: '#f1f2f6', padding: '15px', borderRadius: '10px', fontSize: '1.2rem'}}><strong>שבוע אחרון:</strong> {visitStats.week}</div>
-                   <div style={{backgroundColor: '#f1f2f6', padding: '15px', borderRadius: '10px', fontSize: '1.2rem'}}><strong>חודש אחרון:</strong> {visitStats.month}</div>
+                   <div style={{backgroundColor: '#F3F0E9', padding: '15px', borderRadius: '10px', fontSize: '1.2rem', color: '#5C6B5E'}}><strong>היום:</strong> {visitStats.today}</div>
+                   <div style={{backgroundColor: '#F3F0E9', padding: '15px', borderRadius: '10px', fontSize: '1.2rem', color: '#5C6B5E'}}><strong>שבוע אחרון:</strong> {visitStats.week}</div>
+                   <div style={{backgroundColor: '#F3F0E9', padding: '15px', borderRadius: '10px', fontSize: '1.2rem', color: '#5C6B5E'}}><strong>חודש אחרון:</strong> {visitStats.month}</div>
                 </div>
-                <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none'}} onClick={() => setShowVisitsModal(false)}>סגור</button>
+                <button style={{...styles.secondaryBtn, backgroundColor: '#D4A373', boxShadow: 'none'}} onClick={() => setShowVisitsModal(false)}>סגירה</button>
              </div>
           </div>
         )}
@@ -783,23 +784,23 @@ function App() {
             paddingTop: isModalKeyboardOpen ? '10%' : '0'
           }}>
             <div style={styles.legalModal}>
-              <h3 style={{marginTop: 0}}>{selectedAdminPlayer.first_name} - עריכה</h3>
+              <h3 style={{marginTop: 0, color: '#5C6B5E'}}>{selectedAdminPlayer.first_name} - עריכה</h3>
               
-              <button style={{...styles.secondaryBtn, marginBottom: '15px', backgroundColor: '#dfe6e9', color: '#2f3542', boxShadow: 'none'}} onClick={() => setShowLoginHistory(!showLoginHistory)}>
-                {showLoginHistory ? '🔙 חזור לטבלת הניקוד' : '🕒 צפה בכניסות קודמות'}
+              <button style={{...styles.secondaryBtn, marginBottom: '15px', backgroundColor: '#F3F0E9', color: '#5C6B5E', boxShadow: 'none'}} onClick={() => setShowLoginHistory(!showLoginHistory)}>
+                {showLoginHistory ? '🔙 חזרה לטבלת הזרעים' : '🕒 צפייה בכניסות קודמות'}
               </button>
 
               {showLoginHistory ? (
                 <div style={{maxHeight: '40vh', overflowY: 'auto', marginBottom: '20px'}}>
-                  <h4 style={{margin: '0 0 10px 0'}}>היסטוריית התחברויות מלאה:</h4>
+                  <h4 style={{margin: '0 0 10px 0', color: '#5C6B5E'}}>היסטוריית התחברויות מלאה:</h4>
                   {selectedAdminPlayer.login_history && selectedAdminPlayer.login_history.length > 0 ? (
                     selectedAdminPlayer.login_history.map((time, idx) => (
-                      <div key={idx} style={{padding: '8px', borderBottom: '1px solid #eee', fontSize: '0.9rem', color: '#2f3542'}}>
+                      <div key={idx} style={{padding: '8px', borderBottom: '1px solid #E2E8E4', fontSize: '0.9rem', color: '#5C6B5E'}}>
                         {formatDateTime(time)}
                       </div>
                     ))
                   ) : (
-                    <p style={{color: '#e17055'}}>אין היסטוריה קודמת למשתמש זה.</p>
+                    <p style={{color: '#D4A373'}}>אין היסטוריה קודמת למשתמש זה.</p>
                   )}
                 </div>
               ) : (
@@ -807,8 +808,8 @@ function App() {
                   {Object.entries(adminEditingStats).map(([key, data]) => {
                     const displayKey = key.replace('easy', 'קל').replace('medium', 'בינוני').replace('hard', 'קשה').replace('_', ' | ');
                     return (
-                    <div key={key} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f2f6', padding: '10px', borderRadius: '8px'}}>
-                      <span style={{fontSize: '0.85rem', fontWeight: 'bold'}}>{displayKey}</span>
+                    <div key={key} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '8px'}}>
+                      <span style={{fontSize: '0.85rem', fontWeight: 'bold', color: '#5C6B5E'}}>{displayKey}</span>
                       <input 
                         type="number" 
                         inputMode="numeric"
@@ -816,7 +817,7 @@ function App() {
                         onChange={(e) => handleAdminScoreChange(key, e.target.value)}
                         onFocus={() => setIsModalKeyboardOpen(true)}
                         onBlur={() => setIsModalKeyboardOpen(false)}
-                        style={{width: '60px', padding: '5px', borderRadius: '5px', border: '1px solid #ccc', textAlign: 'center'}}
+                        style={{width: '60px', padding: '5px', borderRadius: '5px', border: '1px solid #C1CCC3', textAlign: 'center', color: '#5C6B5E'}}
                       />
                     </div>
                   )})}
@@ -824,8 +825,8 @@ function App() {
               )}
               
               <div style={{display: 'flex', gap: '10px'}}>
-                {!showLoginHistory && <button style={styles.primaryBtn} onClick={saveAdminEdits}>שמור ניקוד</button>}
-                <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none', flex: 1}} onClick={() => setSelectedAdminPlayer(null)}>סגור</button>
+                {!showLoginHistory && <button style={styles.primaryBtn} onClick={saveAdminEdits}>שמירת זרעים</button>}
+                <button style={{...styles.secondaryBtn, backgroundColor: '#D4A373', boxShadow: 'none', flex: 1}} onClick={() => setSelectedAdminPlayer(null)}>סגירה</button>
               </div>
             </div>
           </div>
@@ -848,48 +849,48 @@ function App() {
           <h1 style={styles.title}>מפענחי הצפנים</h1>
 
           <div style={styles.selectionBox}>
-             <p style={styles.sectionLabel}>בחר גיל:</p>
+             <p style={styles.sectionLabel}>במי נתמקד היום?</p>
              <div style={styles.tabGroup}>
                 {['ילדים', 'נוער', 'מבוגרים'].map(cat => (
                   <button 
                     key={cat} 
                     onClick={() => setSelectedCategory(cat)} 
-                    style={{...styles.tabBtn, backgroundColor: selectedCategory === cat ? '#48dbfb' : '#f1f2f6', color: '#000'}}
+                    style={{...styles.tabBtn, backgroundColor: selectedCategory === cat ? '#E2C2A4' : '#F3F0E9', color: '#5C6B5E'}}
                   >
                     {cat}
                   </button>
                 ))}
              </div>
-             <p style={styles.sectionLabel}>בחר רמה:</p>
+             <p style={styles.sectionLabel}>איזו רמה נבחר?</p>
              <div style={styles.tabGroup}>
-                <button onClick={() => setSelectedLevel('easy')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'easy' ? '#1dd1a1' : '#f1f2f6', color: '#000'}}>קל</button>
-                <button onClick={() => setSelectedLevel('medium')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'medium' ? '#feca57' : '#f1f2f6', color: '#000'}}>בינוני</button>
-                <button onClick={() => setSelectedLevel('hard')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'hard' ? '#ff6b6b' : '#f1f2f6', color: selectedLevel === 'hard' ? '#fff' : '#000'}}>קשה</button>
+                <button onClick={() => setSelectedLevel('easy')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'easy' ? '#A3C4BC' : '#F3F0E9', color: '#5C6B5E'}}>קל</button>
+                <button onClick={() => setSelectedLevel('medium')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'medium' ? '#F3D28A' : '#F3F0E9', color: '#5C6B5E'}}>בינוני</button>
+                <button onClick={() => setSelectedLevel('hard')} style={{...styles.tabBtn, backgroundColor: selectedLevel === 'hard' ? '#D4A373' : '#F3F0E9', color: selectedLevel === 'hard' ? '#fff' : '#5C6B5E'}}>קשה</button>
              </div>
           </div>
-          <hr style={{margin: '15px 0', opacity: 0.2}} />
+          <hr style={{margin: '15px 0', borderColor: '#E2E8E4', opacity: 0.5}} />
           
           {whatsNewText && whatsNewText.trim() !== '' && (
-             <button style={{...styles.primaryBtn, backgroundColor: '#9c88ff', boxShadow: '0 4px 0 #8c7ae6', marginBottom: '15px'}} onClick={() => setShowWhatsNewModal(true)}>
-               📣 מה חדש במשחק?
+             <button style={{...styles.primaryBtn, backgroundColor: '#8CA595', boxShadow: '0 4px 0 #708477', marginBottom: '15px'}} onClick={() => setShowWhatsNewModal(true)}>
+               📣 מה התחדש אצלנו?
              </button>
           )}
 
           {player ? (
             <div style={styles.welcomeBox}>
-              <h3 style={{margin: '0 0 5px 0', color: '#2f3542'}}>היי {player.first_name}! 👋</h3>
-              <div style={styles.scoreBadge}>נקודות ברמה זו: {currentScore}</div>
-              <div style={{marginTop: '10px'}}><button style={styles.logoutBtn} onClick={handleLogout}>התנתק משתמש</button></div>
+              <h3 style={{margin: '0 0 5px 0', color: '#5C6B5E'}}>שלום {player.first_name} 🌿</h3>
+              <div style={styles.scoreBadge}>זרעים שנאספו ברמה זו: {currentScore}</div>
+              <div style={{marginTop: '10px'}}><button style={styles.logoutBtn} onClick={handleLogout}>להתראות בינתיים</button></div>
             </div>
           ) : ( 
             <div style={styles.welcomeBox}>
-               <p style={styles.subtitle}>מוכנים לפצח את הקוד?</p>
-               <div style={styles.scoreBadge}>נקודות ברמה זו: {currentScore}</div>
+               <p style={styles.subtitle}>מוכנים לגלות מה מסתתר?</p>
+               <div style={styles.scoreBadge}>זרעים שנאספו ברמה זו: {currentScore}</div>
             </div>
           )}
           <div style={styles.menuButtons}>
-            {!player && <button style={styles.secondaryBtn} onClick={() => setAppState('login')}>התחברות / הרשמה</button>}
-            <button style={styles.primaryBtn} onClick={() => { setAppState('playing'); fetchRandomPhrase(); }}>שחק עכשיו 🎮</button>
+            {!player && <button style={styles.secondaryBtn} onClick={() => setAppState('login')}>הצטרפות למסע</button>}
+            <button style={styles.primaryBtn} onClick={() => { setAppState('playing'); fetchRandomPhrase(); }}>בואו נשחק 🍃</button>
           </div>
         </div>
 
@@ -902,25 +903,25 @@ function App() {
         {showWhatsNewModal && (
           <div style={styles.overlay}>
              <div style={styles.legalModal}>
-                <h2 style={{marginTop: 0, color: '#9c88ff'}}>✨ מה חדש?</h2>
-                <div style={{textAlign: 'right', whiteSpace: 'pre-line', lineHeight: '1.6', color: '#576574', marginBottom: '20px', fontSize: '1rem'}}>
+                <h2 style={{marginTop: 0, color: '#5C6B5E'}}>🕊️ התחדשות טבעית</h2>
+                <div style={{textAlign: 'right', whiteSpace: 'pre-line', lineHeight: '1.6', color: '#7E8B80', marginBottom: '20px', fontSize: '1rem'}}>
                   {whatsNewText}
                 </div>
-                <button style={{...styles.primaryBtn, backgroundColor: '#9c88ff', boxShadow: '0 4px 0 #8c7ae6'}} onClick={() => setShowWhatsNewModal(false)}>איזה יופי!</button>
+                <button style={{...styles.primaryBtn, backgroundColor: '#8CA595', boxShadow: '0 4px 0 #708477'}} onClick={() => setShowWhatsNewModal(false)}>איזה יופי</button>
              </div>
           </div>
         )}
 
         {showCookieConsent && (
           <div style={styles.cookieBanner}>
-            <div style={{fontSize: '1.5rem', marginBottom: '5px'}}>🍪</div>
-            <h4 style={{margin: '0 0 5px 0', color: '#2f3542'}}>אנחנו משתמשים בעוגיות</h4>
-            <p style={{fontSize: '0.85rem', color: '#576574', margin: '0 0 15px 0'}}>
-              האתר עושה שימוש בקבצי "קוקיז" כדי לשמור את ההתקדמות שלך ולספק חווית משחק מותאמת אישית, וכן להצגת מודעות רלוונטיות (כמו Google AdSense).
+            <div style={{fontSize: '1.5rem', marginBottom: '5px'}}>🌾</div>
+            <h4 style={{margin: '0 0 5px 0', color: '#5C6B5E'}}>אנו נעזרים בעוגיות</h4>
+            <p style={{fontSize: '0.85rem', color: '#7E8B80', margin: '0 0 15px 0'}}>
+              כדי להנעים את שהותכם ולשמור על ההתקדמות שלכם במשחק, וכן להצגת מודעות רלוונטיות, אנו נעזרים בקבצי "קוקיז".
             </p>
             <div style={{display: 'flex', gap: '10px'}}>
               <button style={{...styles.primaryBtn, padding: '10px 20px', fontSize: '1rem'}} onClick={acceptCookies}>הבנתי והסכמתי</button>
-              <button style={{...styles.secondaryBtn, padding: '10px 20px', fontSize: '1rem', backgroundColor: '#f1f2f6', color: '#2f3542', boxShadow: 'none'}} onClick={() => setLegalDoc('privacy')}>קרא עוד</button>
+              <button style={{...styles.secondaryBtn, padding: '10px 20px', fontSize: '1rem', backgroundColor: '#F3F0E9', color: '#5C6B5E', boxShadow: 'none'}} onClick={() => setLegalDoc('privacy')}>קריאה נוספת</button>
             </div>
           </div>
         )}
@@ -932,10 +933,10 @@ function App() {
             paddingTop: isModalKeyboardOpen ? '20%' : '0'
           }}>
             <div style={styles.modal}>
-              <h3 style={{marginTop: 0, color: '#2f3542'}}>אזור ניהול</h3>
+              <h3 style={{marginTop: 0, color: '#5C6B5E'}}>כניסת צוות</h3>
               <input 
                 type="password" 
-                placeholder="הכנס קוד סודי" 
+                placeholder="הקלידו את הקוד" 
                 value={adminPasscode} 
                 onChange={(e) => setAdminPasscode(e.target.value)} 
                 onFocus={() => setIsModalKeyboardOpen(true)}
@@ -943,7 +944,6 @@ function App() {
                 style={{...styles.input, textAlign: 'center', letterSpacing: '5px'}} 
               />
               <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
-                {/* כאן בוצע השינוי המבוקש לכפתור כניסת מנהל! onPointerDown מונע ירידת מקלדת */}
                 <button 
                   style={styles.primaryBtn} 
                   onPointerDown={(e) => {
@@ -954,19 +954,17 @@ function App() {
                 >
                   {loading ? 'מתחבר...' : 'כניסה'}
                 </button>
-                <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none'}} onClick={() => {setShowAdminAuth(false); setAdminPasscode('');}}>ביטול</button>
+                <button style={{...styles.secondaryBtn, backgroundColor: '#D4A373', boxShadow: 'none'}} onClick={() => {setShowAdminAuth(false); setAdminPasscode('');}}>חזרה</button>
               </div>
             </div>
           </div>
         )}
 
-        {renderLegalModal()}
-
         {showGuestWarning && (
           <div style={styles.overlay}><div style={styles.modal}>
-            <h2 style={{color:'#ff6b6b'}}>רגע אחד!</h2><p>בתור אורח, הניקוד לא יישמר בשרת.</p>
-            <button style={styles.primaryBtn} onClick={() => { setAppState('playing'); fetchRandomPhrase(); setShowGuestWarning(false); }}>שחק בכל זאת</button>
-            <button style={styles.secondaryBtn} onClick={() => setShowGuestWarning(false)}>ביטול</button>
+            <h2 style={{color:'#D4A373'}}>רגע אחד!</h2><p style={{color: '#5C6B5E'}}>אורחים לא יכולים לאסוף זרעים לעתיד.</p>
+            <button style={styles.primaryBtn} onClick={() => { setAppState('playing'); fetchRandomPhrase(); setShowGuestWarning(false); }}>נשחק בכל זאת</button>
+            <button style={{...styles.secondaryBtn, backgroundColor: '#F3F0E9', color: '#5C6B5E', boxShadow: 'none', marginTop: '10px'}} onClick={() => setShowGuestWarning(false)}>חזרה להרשמה</button>
           </div></div>
         )}
       </div>
@@ -981,10 +979,10 @@ function App() {
             marginTop: isKeyboardOpen ? '-50px' : '0',
             transition: 'all 0.3s ease'
         }}>
-          <h2 style={styles.title}>כניסה למשחק</h2>
+          <h2 style={styles.title}>נשמח להכירכם</h2>
           <input 
             type="text" 
-            placeholder="שם פרטי (חובה תמיד!)" 
+            placeholder="איך קוראים לכם?" 
             value={loginName} 
             onChange={(e) => setLoginName(e.target.value)} 
             onFocus={() => setIsKeyboardOpen(true)}
@@ -993,16 +991,16 @@ function App() {
           />
           <input 
             type="text" 
-            placeholder="טלפון או אימייל (חובה)" 
+            placeholder="טלפון או אימייל להתקשרות" 
             value={loginContact} 
             onChange={(e) => setLoginContact(e.target.value)} 
             onFocus={() => setIsKeyboardOpen(true)}
             onBlur={() => setIsKeyboardOpen(false)}
             style={styles.input} 
           />
-          {loginError && <p style={{color:'red', fontSize:'0.9rem', margin: '5px 0'}}>{loginError}</p>}
-          <button style={styles.primaryBtn} onClick={handleLoginOrRegister} disabled={loading}>{loading ? 'מתחבר...' : 'היכנס למשחק'}</button>
-          <button style={{...styles.secondaryBtn, marginTop: '10px'}} onClick={() => setAppState('menu')}>ביטול</button>
+          {loginError && <p style={{color:'#D4A373', fontSize:'0.9rem', margin: '5px 0'}}>{loginError}</p>}
+          <button style={styles.primaryBtn} onClick={handleLoginOrRegister} disabled={loading}>{loading ? 'נכנסים...' : 'הצטרפות'}</button>
+          <button style={{...styles.secondaryBtn, marginTop: '10px', backgroundColor: '#F3F0E9', color: '#5C6B5E', boxShadow: 'none'}} onClick={() => setAppState('menu')}>ביטול</button>
         </div>
       </div>
     );
@@ -1013,9 +1011,9 @@ function App() {
       return (
         <div style={styles.containerFixed}>
           <div style={styles.card}>
-            <h2 style={styles.title}>🏆 סיימת הכל! 🏆</h2>
-            <p>אין יותר משפטים ב{selectedCategory} רמת {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}.</p>
-            <button style={styles.primaryBtn} onClick={() => setAppState('menu')}>חזור לתפריט</button>
+            <h2 style={styles.title}>🌿 סיימתם הכל! 🌿</h2>
+            <p style={{color: '#5C6B5E'}}>אין יותר חידות בקטגוריית {selectedCategory} רמת {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}.</p>
+            <button style={styles.primaryBtn} onClick={() => setAppState('menu')}>חזרה לבחירה</button>
           </div>
         </div>
       );
@@ -1026,7 +1024,6 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
-        {/* Toast הודעות שומר על המקלדת פתוחה */}
         {toastMsg && (
           <div style={styles.toast}>
             {toastMsg}
@@ -1056,13 +1053,13 @@ function App() {
         <div style={styles.topSectionFixed} lang="he-IL">
             <div style={styles.topBar}>
               <div>
-                <div style={{fontSize: '0.8rem', opacity: 0.9}}>{selectedCategory} | {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}</div>
-                <div style={{fontWeight:'bold', marginTop: '2px', fontSize: '1rem'}}>נושא: {currentPhrase?.topic}</div>
+                <div style={{fontSize: '0.8rem', opacity: 0.9, color: '#F3F0E9'}}>{selectedCategory} | {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}</div>
+                <div style={{fontWeight:'bold', marginTop: '2px', fontSize: '1rem', color: '#FFF'}}>נושא: {currentPhrase?.topic}</div>
               </div>
               <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                <div style={styles.scoreDisplay}>✨ {currentScore} </div>
+                <div style={styles.scoreDisplay}>🌾 {currentScore} </div>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
-                  <button style={{...styles.smallBtn, backgroundColor: '#feca57', color: '#2f3542', border: 'none', fontWeight:'bold'}} onClick={handleSkip}>דלג ⏭️</button>
+                  <button style={{...styles.smallBtn, backgroundColor: '#F3D28A', color: '#5C6B5E', border: 'none', fontWeight:'bold'}} onClick={handleSkip}>לדלג 🍃</button>
                   <button style={styles.smallBtn} onClick={() => {saveCurrentProgress(); setAppState('menu');}}>תפריט</button>
                 </div>
               </div>
@@ -1078,7 +1075,7 @@ function App() {
                      applyHint();
                    }}
                  >
-                   💡 {forcedHintFor ? 'שחרר נעילה!' : 'רמז'} ({hintsUsedInRound === 0 ? 'חינם' : '-' + globalHintCost})
+                   💡 {forcedHintFor ? 'בקשת עזרה' : 'רמז עדין'} ({hintsUsedInRound === 0 ? 'ללא זרעים' : '-' + globalHintCost})
                  </button>
                  
                  {hasMistakes && (
@@ -1089,7 +1086,7 @@ function App() {
                        handleClearMistakes();
                      }}
                    >
-                     🧹 נקה טעויות
+                     🧹 ניקוי בלבולים
                    </button>
                  )}
 
@@ -1120,12 +1117,12 @@ function App() {
                   const isCorrect = correctCiphers.includes(num);
                   const isForcedHint = forcedHintFor === num && !isInitial;
                   
-                  let bgColor = '#fff';
-                  let borderColor = '#c8d6e5';
+                  let bgColor = '#FFF8F0';
+                  let borderColor = '#D5D0C5';
                   
-                  if (isInitial) { bgColor = '#f1f2f6'; borderColor = '#a4b0be'; }
-                  else if (isForcedHint) { bgColor = '#ffeaa7'; borderColor = '#e17055'; } 
-                  else if (isSelected) { bgColor = '#fffdf3'; borderColor = '#ff9f43'; }
+                  if (isInitial) { bgColor = '#EAE6DB'; borderColor = '#BDB8B0'; }
+                  else if (isForcedHint) { bgColor = '#F3D28A'; borderColor = '#D4A373'; } 
+                  else if (isSelected) { bgColor = '#FFFFFF'; borderColor = '#A3C4BC'; }
 
                   return (
                     <div 
@@ -1142,12 +1139,12 @@ function App() {
                         handleBoxClick(index, num, isInitial);
                       }}
                     >
-                      <div style={{...styles.guessedLetter, fontSize: `${boxSize * 0.6}px`, color: isInitial ? '#576574' : '#2f3542'}}>
+                      <div style={{...styles.guessedLetter, fontSize: `${boxSize * 0.6}px`, color: isInitial ? '#7E8B80' : '#5C6B5E'}}>
                         {guessed}
                         {isCorrect && !isInitial && <span style={styles.checkmark}>✔</span>}
                       </div>
-                      <div style={{...styles.secretNumber, fontSize: `${boxSize * 0.3}px`}}>
-                        {isForcedHint ? '🔒' : num}
+                      <div style={{...styles.secretNumber, fontSize: `${boxSize * 0.3}px`, color: '#7E8B80'}}>
+                        {isForcedHint ? '🌸' : num}
                       </div>
                     </div>
                   );
@@ -1168,18 +1165,18 @@ function App() {
         {showWinModal && (
           <div style={styles.overlay}>
             <div style={styles.modal}>
-              <h1 style={{fontSize: '3rem', margin: 0}}>🎉</h1>
-              <h2 style={{color: '#1dd1a1'}}>כל הכבוד!</h2>
-              <p style={{marginBottom: '5px'}}>פיצחת וזכית ב-{Math.max(0, 5 - hintsUsedInRound)} נקודות!</p>
+              <h1 style={{fontSize: '3rem', margin: 0}}>🌾</h1>
+              <h2 style={{color: '#8CA595'}}>נפלא מאוד!</h2>
+              <p style={{marginBottom: '5px', color: '#5C6B5E'}}>גיליתם את הצופן ואספתם {Math.max(0, 5 - hintsUsedInRound)} זרעים!</p>
               
-              <div style={{backgroundColor: '#f1f2f6', padding: '15px', borderRadius: '12px', margin: '15px 0', border: '2px dashed #1dd1a1'}}>
-                <span style={{fontSize: '0.85rem', color: '#576574'}}>המשפט שפיצחת:</span>
-                <div style={{fontSize: '1.4rem', fontWeight: 'bold', color: '#2f3542', marginTop: '5px'}}>
+              <div style={{backgroundColor: '#F3F0E9', padding: '15px', borderRadius: '12px', margin: '15px 0', border: '2px dashed #A3C4BC'}}>
+                <span style={{fontSize: '0.85rem', color: '#7E8B80'}}>הנה מה שהסתתר שם:</span>
+                <div style={{fontSize: '1.4rem', fontWeight: 'bold', color: '#5C6B5E', marginTop: '5px'}}>
                   {currentPhrase?.text}
                 </div>
               </div>
 
-              <button style={styles.primaryBtn} onClick={fetchRandomPhrase}>לצופן הבא ➡️</button>
+              <button style={styles.primaryBtn} onClick={fetchRandomPhrase}>נמשיך במסע 🌿</button>
             </div>
           </div>
         )}
@@ -1189,56 +1186,56 @@ function App() {
   return null;
 }
 
-// --- עיצוב ---
+// --- עיצוב טבעי אנתרופוסופי ---
 const styles = {
-  containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', padding: '15px', boxSizing: 'border-box', position: 'relative' },
-  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#f7f1e3', direction: 'rtl', overflow: 'hidden' }, 
-  card: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center', width: '100%', maxWidth: '380px' },
-  title: { color: '#ff6b6b', fontSize: '1.8rem', marginBottom: '10px', textShadow: '1px 1px 0 #feca57' },
-  subtitle: { color: '#576574', fontSize: '1rem', marginBottom: '15px' },
-  sectionLabel: { fontWeight: 'bold', margin: '8px 0 4px', fontSize: '0.85rem', textAlign: 'right' },
-  tabGroup: { display: 'flex', gap: '5px' },
-  tabBtn: { flex: 1, padding: '8px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', transition: '0.2s' },
+  containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#F8F5EE', direction: 'rtl', padding: '15px', boxSizing: 'border-box', position: 'relative', fontFamily: 'system-ui, -apple-system, sans-serif' },
+  containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#F8F5EE', direction: 'rtl', overflow: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif' }, 
+  card: { backgroundColor: '#FFFFFF', padding: '25px', borderRadius: '16px', boxShadow: '0 8px 20px rgba(92, 107, 94, 0.08)', textAlign: 'center', width: '100%', maxWidth: '380px' },
+  title: { color: '#8CA595', fontSize: '1.8rem', marginBottom: '10px' },
+  subtitle: { color: '#7E8B80', fontSize: '1rem', marginBottom: '15px' },
+  sectionLabel: { fontWeight: 'normal', margin: '8px 0 4px', fontSize: '0.85rem', textAlign: 'right', color: '#5C6B5E' },
+  tabGroup: { display: 'flex', gap: '8px' },
+  tabBtn: { flex: 1, padding: '8px', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', transition: '0.2s' },
   welcomeBox: { marginBottom: '15px' },
-  scoreBadge: { backgroundColor: '#feca57', color: '#fff', padding: '5px 15px', borderRadius: '20px', display: 'inline-block', fontWeight: 'bold', fontSize: '1rem' },
-  logoutBtn: { background: 'none', border: '1px solid #ff6b6b', color: '#ff6b6b', padding: '4px 10px', borderRadius: '10px', fontSize: '0.8rem', cursor: 'pointer', marginTop: '5px' },
+  scoreBadge: { backgroundColor: '#F3D28A', color: '#5C6B5E', padding: '6px 16px', borderRadius: '12px', display: 'inline-block', fontWeight: 'bold', fontSize: '0.9rem' },
+  logoutBtn: { background: 'none', border: '1px solid #D4A373', color: '#D4A373', padding: '4px 12px', borderRadius: '8px', fontSize: '0.8rem', cursor: 'pointer', marginTop: '5px' },
   menuButtons: { display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' },
-  primaryBtn: { backgroundColor: '#1dd1a1', color: '#fff', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #10ac84' },
-  secondaryBtn: { backgroundColor: '#48dbfb', color: '#fff', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #2e86de' },
-  input: { width: '100%', padding: '12px', margin: '8px 0', borderRadius: '10px', border: '2px solid #eee', fontSize: '1rem', boxSizing: 'border-box', outline: 'none' },
+  primaryBtn: { backgroundColor: '#A3C4BC', color: '#FFFFFF', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #82A29A' },
+  secondaryBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #C4A587' },
+  input: { width: '100%', padding: '12px', margin: '8px 0', borderRadius: '12px', border: '1px solid #D5D0C5', fontSize: '1rem', boxSizing: 'border-box', outline: 'none', backgroundColor: '#FCFAEB', color: '#5C6B5E' },
   
-  footer: { position: 'absolute', bottom: '15px', display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8fa6' },
+  footer: { position: 'absolute', bottom: '15px', display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#A3B1A6' },
   footerLink: { cursor: 'pointer', textDecoration: 'underline' },
 
-  cookieBanner: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', backgroundColor: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' },
-  legalModal: { backgroundColor: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '450px', maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' },
+  cookieBanner: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', backgroundColor: '#FFFFFF', padding: '20px', borderRadius: '16px', boxShadow: '0 10px 30px rgba(92, 107, 94, 0.15)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' },
+  legalModal: { backgroundColor: '#FFFFFF', padding: '25px', borderRadius: '16px', width: '90%', maxWidth: '450px', maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(92, 107, 94, 0.2)' },
 
-  topSectionFixed: { backgroundColor: '#2f3542', flexShrink: 0, borderBottom: '4px solid #feca57', display: 'flex', flexDirection: 'column' },
-  topBar: { color: '#fff', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  hintContainer: { backgroundColor: '#dfe6e9', padding: '10px', textAlign: 'center' },
-  hintBtn: { backgroundColor: '#ff9f43', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #e67e22', fontSize: '0.9rem' },
+  topSectionFixed: { backgroundColor: '#5C6B5E', flexShrink: 0, borderBottom: '4px solid #8CA595', display: 'flex', flexDirection: 'column' },
+  topBar: { color: '#F3F0E9', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  hintContainer: { backgroundColor: '#EAE6DB', padding: '10px', textAlign: 'center' },
+  hintBtn: { backgroundColor: '#F3D28A', color: '#5C6B5E', border: 'none', padding: '8px 20px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #D4A373', fontSize: '0.9rem' },
   
-  clearBtn: { backgroundColor: '#ff6b6b', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #e55039', fontSize: '0.9rem' },
+  clearBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '8px 15px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #C4A587', fontSize: '0.9rem' },
 
-  scoreDisplay: { color: '#feca57', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
-  smallBtn: { background: 'none', border: '1px solid #fff', color: '#fff', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem' },
+  scoreDisplay: { color: '#F3D28A', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
+  smallBtn: { background: 'none', border: '1px solid #F3F0E9', color: '#F3F0E9', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.75rem' },
   
   boardArea: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', width: '100%', transition: 'all 0.3s ease' },
   board: { margin: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '15px', maxWidth: '800px', width: '100%' },
   
   wordWrapper: { display: 'flex', gap: '4px', direction: 'rtl', flexWrap: 'nowrap' },
   
-  letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '4px', cursor: 'pointer', transition: '0.2s', position: 'relative', flexShrink: 0 },
+  letterBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '3px solid', borderRadius: '8px', cursor: 'pointer', transition: '0.2s', position: 'relative', flexShrink: 0 },
   guessedLetter: { fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' },
-  checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#1dd1a1', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
-  secretNumber: { fontWeight: 'bold' },
-  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, transition: 'all 0.3s ease' },
-  modal: { backgroundColor: '#fff', padding: '30px', borderRadius: '25px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(0,0,0,0.3)', transition: 'all 0.3s ease' },
+  checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#8CA595', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
+  secretNumber: { fontWeight: 'normal' },
+  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(92, 107, 94, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, transition: 'all 0.3s ease' },
+  modal: { backgroundColor: '#FFFFFF', padding: '30px', borderRadius: '16px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(92, 107, 94, 0.2)', transition: 'all 0.3s ease' },
 
-  adminPlayerCard: { backgroundColor: '#fff', border: '1px solid #dfe6e9', borderRadius: '10px', padding: '10px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' },
+  adminPlayerCard: { backgroundColor: '#F3F0E9', border: 'none', borderRadius: '12px', padding: '12px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(92, 107, 94, 0.05)' },
 
-  // עיצוב ההודעה הצפה (Toast)
-  toast: { position: 'fixed', top: '35%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'rgba(47, 53, 66, 0.95)', color: '#fff', padding: '15px 25px', borderRadius: '15px', zIndex: 9999, fontWeight: 'bold', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', textAlign: 'center', width: 'max-content', maxWidth: '85%', fontSize: '1rem', lineHeight: '1.4' }
+  // הודעה צפה (Toast) רגועה וטבעית
+  toast: { position: 'fixed', top: '35%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'rgba(92, 107, 94, 0.95)', color: '#F3F0E9', padding: '15px 25px', borderRadius: '12px', zIndex: 9999, fontWeight: 'normal', boxShadow: '0 10px 25px rgba(92, 107, 94, 0.2)', textAlign: 'center', width: 'max-content', maxWidth: '85%', fontSize: '1rem', lineHeight: '1.4' }
 };
 
 export default App;
