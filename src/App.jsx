@@ -9,6 +9,7 @@ function App() {
   const [appState, setAppState] = useState('menu'); 
   const [showGuestWarning, setShowGuestWarning] = useState(false);
   const [showWinModal, setShowWinModal] = useState(false);
+  const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [noMorePhrases, setNoMorePhrases] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -44,7 +45,7 @@ function App() {
   // --- תוספות למערכת הרמזים הכלכלית ---
   const [localStats, setLocalStats] = useState({});
   const currentKey = `${selectedCategory}_${selectedLevel}`;
-  const currentStats = player?.category_stats?.[currentKey] || localStats[currentKey] || { score: 5, hint_cost: 1, cycle: 0 };
+  const currentStats = player?.category_stats?.[currentKey] || localStats[currentKey] || { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false };
   const currentScore = currentStats.score;
   const globalHintCost = currentStats.hint_cost;
   const wordsInCycle = currentStats.cycle;
@@ -75,7 +76,6 @@ function App() {
   const [showVisitsModal, setShowVisitsModal] = useState(false);
   const [visitStats, setVisitStats] = useState({ today: 0, week: 0, month: 0 });
 
-  // --- פונקציית הודעות (Toast) חכמה ששומרת על הפוקוס ---
   const showToast = (msg) => {
     if (toastTimeout) clearTimeout(toastTimeout);
     setToastMsg(msg);
@@ -83,7 +83,6 @@ function App() {
     setToastTimeout(t);
   };
 
-  // --- אתחול אפליקציה (קוקיז, סטטיסטיקות, "מה חדש" ומעקב כניסה כללי) ---
   useEffect(() => {
     const initApp = async () => {
       const savedPlayer = localStorage.getItem('crypto_player_session');
@@ -363,10 +362,17 @@ function App() {
   }, [userGuesses]);
 
   const applyHint = () => {
-    let cost = hintsUsedInRound === 0 ? 0 : globalHintCost;
+    // לוגיקת רמז חינם רק למשחק הראשון אי פעם בקטגוריה ורמה
+    const isFirstTimeClue = !currentStats.first_clue_given;
+    let cost = (hintsUsedInRound === 0 && isFirstTimeClue) ? 0 : globalHintCost;
+    
     if (currentScore < cost) {
       showToast(`חסרים לכם מעט זרעים... רמז דורש ${cost} זרעים.`);
       return;
+    }
+
+    if (isFirstTimeClue) {
+        updateCategoryStats({ first_clue_given: true });
     }
 
     if (forcedHintFor !== null) {
@@ -409,7 +415,6 @@ function App() {
     const isFullyInitial = currentPhrase.text.split('').every((c, i) => c === ' ' || cipherMap[c] !== targetNum || initialIndices.includes(i));
     if (isFullyInitial) return; 
 
-    // אם התיבה נעולה, חוסם כל הקלדה בכל הלוח עד שיקחו רמז
     if (forcedHintFor !== null) {
         showToast("התיבה ננעלה 🌸 עלינו להשתמש ברמז כדי להמשיך.");
         return;
@@ -439,7 +444,6 @@ function App() {
       const limit = hintLimits[targetNum] || 5;
       const currentStrikes = (strikes[targetNum] || 0) + 1;
 
-      // הודעות אנתרופוסופיות עדינות ומדויקות
       if (currentStrikes === limit - 1) {
           showToast("זהו ניסיון אחרון... אולי כדאי לחשוב שוב?");
       } else if (currentStrikes >= limit) {
@@ -671,7 +675,7 @@ function App() {
 
     if (legalDoc === 'terms') {
       title = 'תקנון ותנאי שימוש';
-      content = `ברוכים הבאים למשחק "מפענחי הצפנים".
+      content = `ברוכים הבאים למשחק "צופן החכמה".
 השימוש באתר ובמשחק כפוף לתנאים הבאים:
 1. המשחק מוגש "כפי שהוא" (AS IS), ללא כל התחייבות או אחריות מכל סוג שהוא.
 2. ייתכן כי באתר יוצגו פרסומות מצדדים שלישיים (כגון גוגל). אין אנו אחראים לתוכן הפרסומות.
@@ -842,11 +846,13 @@ function App() {
           
           <img 
             src="https://i.postimg.cc/MKHZBh1K/1000182904-removebg-preview.png" 
-            alt="מפענחי הצפנים" 
+            alt="Cryptosophia" 
             style={{ width: '130px', height: 'auto', margin: '0 auto 10px auto', display: 'block', cursor: 'pointer' }} 
             onDoubleClick={() => setShowAdminAuth(true)}
           />
-          <h1 style={styles.title}>מפענחי הצפנים</h1>
+          <h1 style={styles.title}>Cryptosophia</h1>
+          <p style={{...styles.subtitle, color: '#8CA595', fontWeight: 'bold', marginBottom: '5px'}}>צופן החכמה 💎</p>
+          <p style={{fontSize: '0.85rem', color: '#7E8B80', marginBottom: '15px'}}>פיענוח צפנים ברוח האנתרופוסופית</p>
 
           <div style={styles.selectionBox}>
              <p style={styles.sectionLabel}>במי נתמקד היום?</p>
@@ -870,27 +876,30 @@ function App() {
           </div>
           <hr style={{margin: '15px 0', borderColor: '#E2E8E4', opacity: 0.5}} />
           
-          {whatsNewText && whatsNewText.trim() !== '' && (
-             <button style={{...styles.primaryBtn, backgroundColor: '#8CA595', boxShadow: '0 4px 0 #708477', marginBottom: '15px'}} onClick={() => setShowWhatsNewModal(true)}>
-               📣 מה התחדש אצלנו?
-             </button>
-          )}
+          <div style={styles.miniGrid}>
+             <button style={styles.miniBtn} onClick={() => setShowWhatsNewModal(true)}>מה חדש</button>
+             <button style={styles.miniBtn} onClick={() => window.open('https://links.payboxapp.com/Sp7UM53Yu1b', '_blank')}>תחזוק המשחק</button>
+             {player && <button style={styles.miniBtn} onClick={handleLogout}>להתנתק?</button>}
+          </div>
 
-          {player ? (
-            <div style={styles.welcomeBox}>
-              <h3 style={{margin: '0 0 5px 0', color: '#5C6B5E'}}>שלום {player.first_name} 🌿</h3>
-              <div style={styles.scoreBadge}>זרעים שנאספו ברמה זו: {currentScore}</div>
-              <div style={{marginTop: '10px'}}><button style={styles.logoutBtn} onClick={handleLogout}>להתראות בינתיים</button></div>
-            </div>
-          ) : ( 
-            <div style={styles.welcomeBox}>
-               <p style={styles.subtitle}>מוכנים לגלות מה מסתתר?</p>
-               <div style={styles.scoreBadge}>זרעים שנאספו ברמה זו: {currentScore}</div>
-            </div>
-          )}
+          <div style={styles.welcomeBox}>
+            {player ? (
+              <>
+                <h3 style={{margin: '10px 0 5px 0', color: '#5C6B5E'}}>שלום {player.first_name} 🌿</h3>
+                <div style={styles.scoreBadge}>זרעים שנאספו ברמה זו: {currentScore}</div>
+              </>
+            ) : (
+              <>
+                 <p style={styles.subtitle}>מוכנים לגלות מה מסתתר?</p>
+                 <div style={styles.scoreBadge}>זרעים שנאספו ברמה זו: {currentScore}</div>
+              </>
+            )}
+          </div>
+
           <div style={styles.menuButtons}>
             {!player && <button style={styles.secondaryBtn} onClick={() => setAppState('login')}>הצטרפות למסע</button>}
             <button style={styles.primaryBtn} onClick={() => { setAppState('playing'); fetchRandomPhrase(); }}>בואו נשחק 🍃</button>
+            <button style={{...styles.secondaryBtn, backgroundColor: '#A3C4BC', boxShadow: '0 4px 0 #82A29A', marginTop: '5px'}} onClick={() => setShowInstructionsModal(true)}>הוראות המשחק 📖</button>
           </div>
         </div>
 
@@ -912,16 +921,45 @@ function App() {
           </div>
         )}
 
+        {showInstructionsModal && (
+          <div style={styles.overlay}>
+             <div style={styles.legalModal}>
+                <h2 style={{marginTop: 0, color: '#5C6B5E'}}>📖 איך משחקים?</h2>
+                <div style={{textAlign: 'right', whiteSpace: 'pre-line', lineHeight: '1.6', color: '#7E8B80', marginBottom: '20px', fontSize: '1rem', maxHeight: '50vh', overflowY: 'auto'}}>
+                  {`ברוכים הבאים ל-"צופן החכמה"!
+
+מטרת המשחק היא לפענח משפטים נסתרים. כל מספר מייצג אות קבועה בצופן.
+
+✨ זרעים וניקוד:
+הזרעים הם הניקוד שלכם. בכל פעם שאתם פותרים צופן, אתם אוספים זרעים חדשים. זרעים אלו משמשים אתכם לקבלת רמזים ושחרור אותיות "מתקשות".
+
+🌿 נבטים (אותיות):
+האותיות הן כמו נבטים הגדלים מתוך האדמה. חלקן כבר גלויות וחלקן מחכות שתגלו אותן.
+
+💡 רמזים:
+צריכים עזרה? תוכלו להשתמש בזרעים שלכם כדי לקבל רמז. 
+שימו לב: הרמז הראשון בכל קטגוריה ורמה ניתן לכם כמתנה בחינם! לאחר מכן, פירות החכמה דורשים השקעה של זרעים.
+
+🔒 נעילת אותיות:
+אם תטעו יותר מדי פעמים באות מסוימת, התיבה תינעל (🌸). כדי להמשיך, תצטרכו להשתמש ברמז כדי לשחרר את הנעילה בעדינות.
+
+מאחלים לכם מסע פיצוח מהנה ומלא בתובנות!`}
+                </div>
+                <button style={{...styles.primaryBtn, backgroundColor: '#8CA595', boxShadow: '0 4px 0 #708477'}} onClick={() => setShowInstructionsModal(false)}>הבנתי, בואו נשחק!</button>
+             </div>
+          </div>
+        )}
+
         {showCookieConsent && (
           <div style={styles.cookieBanner}>
             <div style={{fontSize: '1.5rem', marginBottom: '5px'}}>🌾</div>
             <h4 style={{margin: '0 0 5px 0', color: '#5C6B5E'}}>אנו נעזרים בעוגיות</h4>
             <p style={{fontSize: '0.85rem', color: '#7E8B80', margin: '0 0 15px 0'}}>
-              כדי להנעים את שהותכם ולשמור על ההתקדמות שלכם במשחק, וכן להצגת מודעות רלוונטיות, אנו נעזרים בקבצי "קוקיז".
+              כדי להנעים את שהותכם ולשמור על ההתקדמות שלכם במשחק, אנו נעזרים בקבצי "קוקיז".
             </p>
             <div style={{display: 'flex', gap: '10px'}}>
-              <button style={{...styles.primaryBtn, padding: '10px 20px', fontSize: '1rem'}} onClick={acceptCookies}>הבנתי והסכמתי</button>
-              <button style={{...styles.secondaryBtn, padding: '10px 20px', fontSize: '1rem', backgroundColor: '#F3F0E9', color: '#5C6B5E', boxShadow: 'none'}} onClick={() => setLegalDoc('privacy')}>קריאה נוספת</button>
+              <button style={{...styles.primaryBtn, padding: '10px 20px', fontSize: '1rem'}} onClick={acceptCookies}>הסכמתי</button>
+              <button style={{...styles.secondaryBtn, padding: '10px 20px', fontSize: '1rem', backgroundColor: '#F3F0E9', color: '#5C6B5E', boxShadow: 'none'}} onClick={() => setLegalDoc('privacy')}>קריאה</button>
             </div>
           </div>
         )}
@@ -1052,10 +1090,18 @@ function App() {
 
         <div style={styles.topSectionFixed} lang="he-IL">
             <div style={styles.topBar}>
-              <div>
+              <div style={{flex: 1}}>
                 <div style={{fontSize: '0.8rem', opacity: 0.9, color: '#F3F0E9'}}>{selectedCategory} | {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}</div>
                 <div style={{fontWeight:'bold', marginTop: '2px', fontSize: '1rem', color: '#FFF'}}>נושא: {currentPhrase?.topic}</div>
               </div>
+              
+              <button 
+                style={{...styles.miniBtn, backgroundColor: '#D4A373', fontSize: '0.7rem', margin: '0 10px', padding: '5px 8px', boxShadow: 'none'}} 
+                onClick={() => window.open('https://links.payboxapp.com/Sp7UM53Yu1b', '_blank')}
+              >
+                תחזוק המשחק
+              </button>
+
               <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
                 <div style={styles.scoreDisplay}>🌾 {currentScore} </div>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
@@ -1075,7 +1121,7 @@ function App() {
                      applyHint();
                    }}
                  >
-                   💡 {forcedHintFor ? 'בקשת עזרה' : 'רמז עדין'} ({hintsUsedInRound === 0 ? 'ללא זרעים' : '-' + globalHintCost})
+                   💡 {forcedHintFor ? 'בקשת עזרה' : 'רמז עדין'} ({(!currentStats.first_clue_given && hintsUsedInRound === 0) ? 'ללא זרעים' : '-' + globalHintCost})
                  </button>
                  
                  {hasMistakes && (
@@ -1191,7 +1237,7 @@ const styles = {
   containerFixed: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', backgroundColor: '#F8F5EE', direction: 'rtl', padding: '15px', boxSizing: 'border-box', position: 'relative', fontFamily: 'system-ui, -apple-system, sans-serif' },
   containerFull: { display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#F8F5EE', direction: 'rtl', overflow: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif' }, 
   card: { backgroundColor: '#FFFFFF', padding: '25px', borderRadius: '16px', boxShadow: '0 8px 20px rgba(92, 107, 94, 0.08)', textAlign: 'center', width: '100%', maxWidth: '380px' },
-  title: { color: '#8CA595', fontSize: '1.8rem', marginBottom: '10px' },
+  title: { color: '#8CA595', fontSize: '1.8rem', marginBottom: '5px' },
   subtitle: { color: '#7E8B80', fontSize: '1rem', marginBottom: '15px' },
   sectionLabel: { fontWeight: 'normal', margin: '8px 0 4px', fontSize: '0.85rem', textAlign: 'right', color: '#5C6B5E' },
   tabGroup: { display: 'flex', gap: '8px' },
@@ -1199,11 +1245,14 @@ const styles = {
   welcomeBox: { marginBottom: '15px' },
   scoreBadge: { backgroundColor: '#F3D28A', color: '#5C6B5E', padding: '6px 16px', borderRadius: '12px', display: 'inline-block', fontWeight: 'bold', fontSize: '0.9rem' },
   logoutBtn: { background: 'none', border: '1px solid #D4A373', color: '#D4A373', padding: '4px 12px', borderRadius: '8px', fontSize: '0.8rem', cursor: 'pointer', marginTop: '5px' },
-  menuButtons: { display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' },
+  menuButtons: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' },
   primaryBtn: { backgroundColor: '#A3C4BC', color: '#FFFFFF', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #82A29A' },
   secondaryBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', width: '100%', boxShadow: '0 4px 0 #C4A587' },
   input: { width: '100%', padding: '12px', margin: '8px 0', borderRadius: '12px', border: '1px solid #D5D0C5', fontSize: '1rem', boxSizing: 'border-box', outline: 'none', backgroundColor: '#FCFAEB', color: '#5C6B5E' },
   
+  miniGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '15px' },
+  miniBtn: { backgroundColor: '#F3F0E9', color: '#5C6B5E', border: '1px solid #D5D0C5', padding: '6px 4px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' },
+
   footer: { position: 'absolute', bottom: '15px', display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#A3B1A6' },
   footerLink: { cursor: 'pointer', textDecoration: 'underline' },
 
@@ -1234,7 +1283,6 @@ const styles = {
 
   adminPlayerCard: { backgroundColor: '#F3F0E9', border: 'none', borderRadius: '12px', padding: '12px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(92, 107, 94, 0.05)' },
 
-  // הודעה צפה (Toast) רגועה וטבעית
   toast: { position: 'fixed', top: '35%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'rgba(92, 107, 94, 0.95)', color: '#F3F0E9', padding: '15px 25px', borderRadius: '12px', zIndex: 9999, fontWeight: 'normal', boxShadow: '0 10px 25px rgba(92, 107, 94, 0.2)', textAlign: 'center', width: 'max-content', maxWidth: '85%', fontSize: '1rem', lineHeight: '1.4' }
 };
 
