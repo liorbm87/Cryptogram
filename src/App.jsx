@@ -357,7 +357,7 @@ function App() {
     }
   }, [userGuesses]);
 
-  // --- הפעלת רמזים - תוקן למשיכת האות כשהתיבה נעולה ---
+  // --- הפעלת רמזים - חושף הכל ולוקח נקודות ---
   const applyHint = () => {
     let cost = hintsUsedInRound === 0 ? 0 : globalHintCost;
     if (currentScore < cost) {
@@ -367,11 +367,10 @@ function App() {
     }
 
     if (forcedHintFor !== null) {
-      // אם התיבה נעולה: חושפים את האות, לוקחים את המחיר ושומרים את המקלדת פתוחה
       const targetToSolve = forcedHintFor;
       const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetToSolve);
       
-      setForcedHintFor(null); // משחררים קודם כדי שהפונקציה הבאה לא תיחסם
+      setForcedHintFor(null); 
       
       handleVirtualKeyPress(correctLetter, targetToSolve, true);
       
@@ -403,7 +402,7 @@ function App() {
     setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
   };
 
-  // --- הקלדת אותיות - מניעת ירידת מקלדת בהודעות רמאות ---
+  // --- הקלדת אותיות ---
   const handleVirtualKeyPress = (letter, forcedNum = null, isHint = false) => {
     const targetNum = forcedNum || selectedNumber;
     if (targetNum === null) return;
@@ -441,7 +440,6 @@ function App() {
       const limit = hintLimits[targetNum] || 5;
       const currentStrikes = (strikes[targetNum] || 0) + 1;
 
-      // הודעות האזהרה - ללא הורדת פוקוס!
       if (currentStrikes === limit - 1) {
           alert("לא לרמות, ניסיון אחרון לאות הזאת לפני בקשת רמז!");
           setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
@@ -498,11 +496,10 @@ function App() {
       });
       return newGuesses;
     });
-    // שומר את המקלדת פתוחה
     setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
   };
 
-  // --- אימות מחמיר ---
+  // --- אימות מחמיר עם הוספת היסטוריית כניסות מבוקרת ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
     const name = loginName.trim();
@@ -1036,22 +1033,28 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
-        {/* הוספנו inputMode="text" כדי לאלץ מקלדת אותיות, בשילוב עם lang ו-dir לעברית */}
+        {/* הגדרות מחמירות להכרחת פתיחת מקלדת בעברית גם במקלדות צד שלישי (SwiftKey/Gboard) */}
         <input 
+           id="hebrew-input"
+           name="hebrew-input"
            ref={inputRef}
            type="text"
            inputMode="text"
-           lang="he"
+           lang="he-IL"
            dir="rtl"
+           aria-label="הקלד אותיות בעברית"
            value={hiddenInputValue}
            onChange={handleNativeInput}
            onFocus={() => setIsKeyboardOpen(true)}
            onBlur={() => setIsKeyboardOpen(false)}
            style={{position: 'absolute', top: '50px', left: 0, opacity: 0, width: '1px', height: '1px', border: 'none', padding: 0}}
-           autoComplete="off" autoCorrect="off" spellCheck="false"
+           autoComplete="off" 
+           autoCorrect="off" 
+           autoCapitalize="off"
+           spellCheck="false"
         />
 
-        <div style={styles.topSectionFixed}>
+        <div style={styles.topSectionFixed} lang="he-IL">
             <div style={styles.topBar}>
               <div>
                 <div style={{fontSize: '0.8rem', opacity: 0.9}}>{selectedCategory} | {selectedLevel === 'easy' ? 'קל' : selectedLevel === 'medium' ? 'בינוני' : 'קשה'}</div>
@@ -1076,7 +1079,7 @@ function App() {
                      applyHint();
                    }}
                  >
-                   💡 {forcedHintFor ? 'שחרר נעילה!' : `רמז (${hintsUsedInRound === 0 ? 'חינם' : '-' + globalHintCost})`}
+                   💡 {forcedHintFor ? 'שחרר נעילה!' : 'רמז'} ({hintsUsedInRound === 0 ? 'חינם' : '-' + globalHintCost})
                  </button>
                  
                  {hasMistakes && (
@@ -1099,7 +1102,7 @@ function App() {
           ...styles.boardArea, 
           justifyContent: isKeyboardOpen ? 'flex-start' : 'center',
           paddingTop: isKeyboardOpen ? '10px' : '20px'
-        }}>
+        }} lang="he-IL">
           <div style={{
             ...styles.board,
             marginTop: isKeyboardOpen ? '0' : 'auto',
@@ -1163,7 +1166,7 @@ function App() {
           </div>
         </div>
 
-        {/* --- חלונית הניצחון עם המילה המודגשת --- */}
+        {/* --- חלונית הניצחון --- */}
         {showWinModal && (
           <div style={styles.overlay}>
             <div style={styles.modal}>
