@@ -357,24 +357,29 @@ function App() {
     }
   }, [userGuesses]);
 
-  // --- הפעלת רמזים ---
+  // --- הפעלת רמזים - תוקן למשיכת האות כשהתיבה נעולה ---
   const applyHint = () => {
     let cost = hintsUsedInRound === 0 ? 0 : globalHintCost;
-    if (currentScore < cost) return alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות. (בעתיד יתווסף כאן כפתור לצפייה בסרטון לנקודות חינם!)`);
+    if (currentScore < cost) {
+      alert(`חסר לך ניקוד! רמז זה עולה ${cost} נקודות. (בעתיד יתווסף כאן כפתור לצפייה בסרטון לנקודות חינם!)`);
+      setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
+      return;
+    }
 
     if (forcedHintFor !== null) {
-      const currentLimit = hintLimits[forcedHintFor] || 5;
-      const newLimit = currentLimit === 5 ? 3 : 1;
+      // אם התיבה נעולה: חושפים את האות, לוקחים את המחיר ושומרים את המקלדת פתוחה
+      const targetToSolve = forcedHintFor;
+      const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetToSolve);
       
-      setHintLimits(prev => ({...prev, [forcedHintFor]: newLimit}));
-      setStrikes(prev => ({...prev, [forcedHintFor]: 0}));
-      setForcedHintFor(null);
+      setForcedHintFor(null); // משחררים קודם כדי שהפונקציה הבאה לא תיחסם
+      
+      handleVirtualKeyPress(correctLetter, targetToSolve, true);
       
       const nextCost = hintsUsedInRound > 0 ? Math.min(10, globalHintCost + 1) : globalHintCost;
       updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost });
       
       setHintsUsedInRound(prev => prev + 1);
-      alert(`התיבה שוחררה! קיבלת עוד ${newLimit} ניסיונות לאות זו.`);
+      setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
       return;
     }
 
@@ -395,9 +400,10 @@ function App() {
       
       setHintsUsedInRound(prev => prev + 1);
     }
+    setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
   };
 
-  // --- הקלדת אותיות ---
+  // --- הקלדת אותיות - מניעת ירידת מקלדת בהודעות רמאות ---
   const handleVirtualKeyPress = (letter, forcedNum = null, isHint = false) => {
     const targetNum = forcedNum || selectedNumber;
     if (targetNum === null) return;
@@ -405,7 +411,11 @@ function App() {
     const isFullyInitial = currentPhrase.text.split('').every((c, i) => c === ' ' || cipherMap[c] !== targetNum || initialIndices.includes(i));
     if (isFullyInitial) return; 
 
-    if (forcedHintFor !== null && forcedHintFor !== targetNum) return alert("קודם שחרר את התיבה האדומה הנעולה בעזרת רמז!");
+    if (forcedHintFor !== null && forcedHintFor !== targetNum) {
+        alert("קודם שחרר את התיבה האדומה הנעולה בעזרת רמז!");
+        setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
+        return;
+    }
 
     const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetNum);
     
@@ -431,12 +441,14 @@ function App() {
       const limit = hintLimits[targetNum] || 5;
       const currentStrikes = (strikes[targetNum] || 0) + 1;
 
-      if (currentStrikes === limit - 1) alert("לא לרמות, ניסיון אחרון לאות הזאת לפני בקשת רמז!");
-      else if (currentStrikes >= limit) {
-        setForcedHintFor(targetNum);
-        if (inputRef.current) inputRef.current.blur(); 
-        setIsKeyboardOpen(false);
-        alert("חרגת ממספר הניסיונות לאות הזו! לחץ על כפתור הרמז כדי לשחרר.");
+      // הודעות האזהרה - ללא הורדת פוקוס!
+      if (currentStrikes === limit - 1) {
+          alert("לא לרמות, ניסיון אחרון לאות הזאת לפני בקשת רמז!");
+          setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
+      } else if (currentStrikes >= limit) {
+          setForcedHintFor(targetNum);
+          alert("חרגת ממספר הניסיונות לאות הזו! לחץ על כפתור הרמז כדי לשחרר.");
+          setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
       }
       
       setStrikes(prev => ({...prev, [targetNum]: currentStrikes}));
@@ -486,9 +498,11 @@ function App() {
       });
       return newGuesses;
     });
+    // שומר את המקלדת פתוחה
+    setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 10);
   };
 
-  // --- אימות מחמיר עם הוספת היסטוריית כניסות מבוקרת ---
+  // --- אימות מחמיר ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
     const name = loginName.trim();
@@ -513,7 +527,6 @@ function App() {
       const currentHistory = Array.isArray(existingPlayer.login_history) ? existingPlayer.login_history : (existingPlayer.last_login ? [existingPlayer.last_login] : []);
       let shouldAddToHistory = true;
 
-      // בדיקת צינון של 15 דקות
       if (currentHistory.length > 0) {
         const lastEntryTime = new Date(currentHistory[0]);
         const diffInMinutes = (now - lastEntryTime) / (1000 * 60);
@@ -1158,7 +1171,6 @@ function App() {
               <h2 style={{color: '#1dd1a1'}}>כל הכבוד!</h2>
               <p style={{marginBottom: '5px'}}>פיצחת וזכית ב-{Math.max(0, 5 - hintsUsedInRound)} נקודות!</p>
               
-              {/* הקופסה החדשה שמציגה את המילה/משפט שפוענחו */}
               <div style={{backgroundColor: '#f1f2f6', padding: '15px', borderRadius: '12px', margin: '15px 0', border: '2px dashed #1dd1a1'}}>
                 <span style={{fontSize: '0.85rem', color: '#576574'}}>המשפט שפיצחת:</span>
                 <div style={{fontSize: '1.4rem', fontWeight: 'bold', color: '#2f3542', marginTop: '5px'}}>
