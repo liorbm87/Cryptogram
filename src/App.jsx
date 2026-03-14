@@ -54,7 +54,7 @@ function App() {
   const [showCookieConsent, setShowCookieConsent] = useState(false);
   const [legalDoc, setLegalDoc] = useState(null); 
 
-  // --- פאנל ניהול נסתר ---
+  // --- פאנל ניהול נסתר ועדכונים ---
   const [showAdminAuth, setShowAdminAuth] = useState(false);
   const [adminPasscode, setAdminPasscode] = useState('');
   const [adminPlayers, setAdminPlayers] = useState([]);
@@ -63,25 +63,51 @@ function App() {
   const [adminEditingStats, setAdminEditingStats] = useState({});
   const [showLoginHistory, setShowLoginHistory] = useState(false);
   const [isModalKeyboardOpen, setIsModalKeyboardOpen] = useState(false);
+  
+  // מה חדש וסטטיסטיקות כניסה
+  const [whatsNewText, setWhatsNewText] = useState('');
+  const [showWhatsNewModal, setShowWhatsNewModal] = useState(false);
+  const [adminWhatsNewInput, setAdminWhatsNewInput] = useState('');
+  const [showVisitsModal, setShowVisitsModal] = useState(false);
+  const [visitStats, setVisitStats] = useState({ today: 0, week: 0, month: 0 });
 
-  // --- זיכרון הלקוח וקוקיז (Persistence) ---
+  // --- אתחול אפליקציה (קוקיז, סטטיסטיקות, "מה חדש" ומעקב כניסה כללי) ---
   useEffect(() => {
-    const savedPlayer = localStorage.getItem('crypto_player_session');
-    if (savedPlayer) {
-      const p = JSON.parse(savedPlayer);
-      p.completed_phrases = p.completed_phrases || [];
-      p.saved_progress = p.saved_progress || {};
-      p.category_stats = p.category_stats || {};
-      setPlayer(p);
-      
-      // עדכון שעת כניסה שקטה עם מניעת הצפה (15 דקות הפרש מינימום בין כניסות)
-      updateLoginHistoryInDB(p);
-    }
+    const initApp = async () => {
+      // 1. שאיבת נתוני לקוח מחובר
+      const savedPlayer = localStorage.getItem('crypto_player_session');
+      if (savedPlayer) {
+        const p = JSON.parse(savedPlayer);
+        p.completed_phrases = p.completed_phrases || [];
+        p.saved_progress = p.saved_progress || {};
+        p.category_stats = p.category_stats || {};
+        setPlayer(p);
+        updateLoginHistoryInDB(p);
+      }
 
-    const hasConsented = localStorage.getItem('crypto_cookie_consent');
-    if (!hasConsented) {
-      setShowCookieConsent(true);
-    }
+      // 2. עוגיות
+      const hasConsented = localStorage.getItem('crypto_cookie_consent');
+      if (!hasConsented) {
+        setShowCookieConsent(true);
+      }
+
+      // 3. משיכת הגדרות מהשרת ("מה חדש")
+      const { data: settingsData } = await supabase.from('admin_settings').select('whats_new').eq('id', 1).single();
+      if (settingsData && settingsData.whats_new) {
+        setWhatsNewText(settingsData.whats_new);
+        setAdminWhatsNewInput(settingsData.whats_new);
+      }
+
+      // 4. מעקב כניסה כללי לאתר (כולל אורחים) - צינון של שעה אחת כדי לא להספים
+      const lastGlobalVisit = localStorage.getItem('crypto_global_visit');
+      const now = new Date();
+      if (!lastGlobalVisit || (now - new Date(lastGlobalVisit)) > 1000 * 60 * 60) {
+        await supabase.from('site_visits').insert([{ visited_at: now.toISOString() }]);
+        localStorage.setItem('crypto_global_visit', now.toISOString());
+      }
+    };
+
+    initApp();
   }, []);
 
   const updateLoginHistoryInDB = async (p) => {
@@ -93,7 +119,6 @@ function App() {
       let currentHistory = Array.isArray(dbPlayer.login_history) ? dbPlayer.login_history : [];
       let shouldAddToHistory = true;
 
-      // מניעת רענונים מלייצר כפילויות היסטוריה (הפרש של 15 דקות לפחות)
       if (currentHistory.length > 0) {
         const lastEntryTime = new Date(currentHistory[0]);
         const diffInMinutes = (now - lastEntryTime) / (1000 * 60);
@@ -103,7 +128,6 @@ function App() {
       }
 
       const updatedHistory = shouldAddToHistory ? [nowIso, ...currentHistory] : currentHistory;
-
       await supabase.from('players').update({ last_login: nowIso, login_history: updatedHistory }).eq('id', p.id);
       
       const updatedPlayer = { ...p, last_login: nowIso, login_history: updatedHistory, category_stats: dbPlayer.category_stats || {} };
@@ -144,7 +168,7 @@ function App() {
     updateCategoryStats({ score: Math.max(0, currentScore + amount) });
   };
 
-  // --- מציאת התיבה הפנויה הבאה לקפיצה אוטומטית ---
+  // --- מציאת התיבה הפנויה הבאה ---
   const getNextAvailableNumber = (phraseText, cMap, correctList, initIndices, currentNum = null) => {
     if (!phraseText) return null;
     const chars = phraseText.split('');
@@ -464,7 +488,7 @@ function App() {
     });
   };
 
-  // --- אימות מחמיר עם הוספת היסטוריית כניסות מבוקרת ---
+  // --- אימות מחמיר עם הוספת היסטוריית כניסות ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
     const name = loginName.trim();
@@ -489,7 +513,6 @@ function App() {
       const currentHistory = Array.isArray(existingPlayer.login_history) ? existingPlayer.login_history : (existingPlayer.last_login ? [existingPlayer.last_login] : []);
       let shouldAddToHistory = true;
 
-      // בדיקת צינון של 15 דקות
       if (currentHistory.length > 0) {
         const lastEntryTime = new Date(currentHistory[0]);
         const diffInMinutes = (now - lastEntryTime) / (1000 * 60);
@@ -555,7 +578,22 @@ function App() {
     return Math.max(16, Math.min(baseSize, maxAllowedSize));
   };
 
-  // --- לוגיקת פאנל הניהול שמושכת קוד מסופהבייס ---
+  // --- לוגיקת פאנל הניהול שמושכת קוד מסופהבייס ומחשבת כניסות ---
+  const fetchGlobalVisits = async () => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const monthStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [dDay, dWeek, dMonth] = await Promise.all([
+      supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', todayStart),
+      supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', weekStart),
+      supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', monthStart)
+    ]);
+    
+    setVisitStats({ today: dDay.count || 0, week: dWeek.count || 0, month: dMonth.count || 0 });
+  };
+
   const handleAdminAuth = async () => {
     setLoading(true);
     const { data: adminData } = await supabase.from('admin_settings').select('passcode').eq('id', 1).single();
@@ -563,6 +601,9 @@ function App() {
     if (adminData && adminData.passcode === adminPasscode) {
       const { data } = await supabase.from('players').select('*').order('last_login', { ascending: false, nullsFirst: false });
       if (data) setAdminPlayers(data); 
+      
+      await fetchGlobalVisits();
+
       setShowAdminAuth(false);
       setAdminPasscode('');
       setAppState('admin');
@@ -571,6 +612,12 @@ function App() {
       setAdminPasscode('');
     }
     setLoading(false);
+  };
+
+  const saveAdminWhatsNew = async () => {
+    await supabase.from('admin_settings').update({ whats_new: adminWhatsNewInput }).eq('id', 1);
+    setWhatsNewText(adminWhatsNewInput);
+    alert('העדכון נשמר ויוצג ללקוחות!');
   };
 
   const openAdminEdit = (p) => {
@@ -625,7 +672,9 @@ function App() {
 1. המשחק מוגש "כפי שהוא" (AS IS), ללא כל התחייבות או אחריות מכל סוג שהוא.
 2. ייתכן כי באתר יוצגו פרסומות מצדדים שלישיים (כגון גוגל). אין אנו אחראים לתוכן הפרסומות.
 3. כל זכויות היוצרים והקניין הרוחני במשחק, בעיצוב ובלוגיקה שייכות ליוצר המשחק.
-4. אנו שומרים את הזכות לשנות את כללי המשחק, הניקוד, או לאפס נתונים בכל עת.`;
+4. אנו שומרים את הזכות לשנות את כללי המשחק, הניקוד, או לאפס נתונים בכל עת.
+
+לכל שאלה, פנייה, בקשה או דיווח על תקלה, נשמח לעמוד לרשותכם וניתן ליצור איתנו קשר בכתובת הדוא"ל: liorbm87@gmail.com`;
     } else if (legalDoc === 'privacy') {
       title = 'מדיניות פרטיות';
       content = `אנו מכבדים את פרטיותך.
@@ -656,6 +705,7 @@ function App() {
 
   // --- מסכים ---
 
+  // אזור הניהול
   if (appState === 'admin') {
     const filteredPlayers = adminPlayers.filter(p => 
       (p.first_name || '').includes(adminSearch) || (p.contact_info || '').includes(adminSearch)
@@ -667,15 +717,37 @@ function App() {
           <h2 style={{color: '#2f3542', margin: '0 0 15px 0'}}>ניהול מערכת 🕵️‍♂️</h2>
           <button style={{...styles.secondaryBtn, marginBottom: '15px'}} onClick={() => setAppState('menu')}>חזור לתפריט</button>
           
+          <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
+            <button style={{...styles.primaryBtn, flex: 1, backgroundColor: '#9c88ff', boxShadow: '0 4px 0 #8c7ae6'}} onClick={() => setShowVisitsModal(true)}>
+              📊 כניסות לאתר היום: {visitStats.today}
+            </button>
+          </div>
+
+          {/* שדה עדכון "מה חדש" */}
+          <div style={{backgroundColor: '#f1f2f6', padding: '10px', borderRadius: '10px', marginBottom: '15px'}}>
+            <p style={{margin: '0 0 5px 0', fontWeight: 'bold', textAlign: 'right', fontSize: '0.85rem'}}>עדכון "מה חדש" ללקוחות:</p>
+            <textarea 
+              value={adminWhatsNewInput} 
+              onChange={(e) => setAdminWhatsNewInput(e.target.value)}
+              onFocus={() => setIsModalKeyboardOpen(true)}
+              onBlur={() => setIsModalKeyboardOpen(false)}
+              placeholder="כתוב כאן על עדכונים חדשים... השאר ריק כדי להעלים את הכפתור מהלקוחות."
+              style={{...styles.input, minHeight: '80px', resize: 'none', marginBottom: '5px'}}
+            />
+            <button style={{...styles.primaryBtn, padding: '8px', fontSize: '0.9rem'}} onClick={saveAdminWhatsNew}>שמור הודעה</button>
+          </div>
+          
           <input 
             type="text" 
             placeholder="חיפוש לפי שם או טלפון..." 
             value={adminSearch} 
             onChange={(e) => setAdminSearch(e.target.value)} 
+            onFocus={() => setIsModalKeyboardOpen(true)}
+            onBlur={() => setIsModalKeyboardOpen(false)}
             style={styles.input} 
           />
 
-          <div style={{marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '10px'}}>
+          <div style={{marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: isModalKeyboardOpen ? '200px' : '0'}}>
             {filteredPlayers.map(p => (
               <div key={p.id} style={styles.adminPlayerCard} onClick={() => openAdminEdit(p)}>
                 <div style={{fontWeight: 'bold', color: '#2f3542'}}>{p.first_name}</div>
@@ -688,6 +760,23 @@ function App() {
           </div>
         </div>
 
+        {/* מודאל סטטיסטיקות כניסה */}
+        {showVisitsModal && (
+          <div style={styles.overlay}>
+             <div style={styles.legalModal}>
+                <h3 style={{marginTop: 0, color: '#2f3542'}}>📊 סטטיסטיקות כניסה לאתר</h3>
+                <p style={{fontSize: '0.85rem', color: '#576574'}}>המונה כולל את כלל הנכנסים לאתר (כולל כאלו שלא נרשמו או שיחקו).</p>
+                <div style={{display: 'flex', flexDirection: 'column', gap: '15px', margin: '20px 0'}}>
+                   <div style={{backgroundColor: '#f1f2f6', padding: '15px', borderRadius: '10px', fontSize: '1.2rem'}}><strong>היום:</strong> {visitStats.today}</div>
+                   <div style={{backgroundColor: '#f1f2f6', padding: '15px', borderRadius: '10px', fontSize: '1.2rem'}}><strong>שבוע אחרון:</strong> {visitStats.week}</div>
+                   <div style={{backgroundColor: '#f1f2f6', padding: '15px', borderRadius: '10px', fontSize: '1.2rem'}}><strong>חודש אחרון:</strong> {visitStats.month}</div>
+                </div>
+                <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none'}} onClick={() => setShowVisitsModal(false)}>סגור</button>
+             </div>
+          </div>
+        )}
+
+        {/* מודאל עריכת משתמש */}
         {selectedAdminPlayer && (
           <div style={{
             ...styles.overlay, 
@@ -746,6 +835,7 @@ function App() {
     );
   }
 
+  // תפריט ראשי של הלקוח
   if (appState === 'menu') {
     return (
       <div style={styles.containerFixed}>
@@ -780,6 +870,14 @@ function App() {
              </div>
           </div>
           <hr style={{margin: '15px 0', opacity: 0.2}} />
+          
+          {/* כפתור מה חדש ללקוח */}
+          {whatsNewText && whatsNewText.trim() !== '' && (
+             <button style={{...styles.primaryBtn, backgroundColor: '#9c88ff', boxShadow: '0 4px 0 #8c7ae6', marginBottom: '15px'}} onClick={() => setShowWhatsNewModal(true)}>
+               📣 מה חדש במשחק?
+             </button>
+          )}
+
           {player ? (
             <div style={styles.welcomeBox}>
               <h3 style={{margin: '0 0 5px 0', color: '#2f3542'}}>היי {player.first_name}! 👋</h3>
@@ -803,6 +901,19 @@ function App() {
           <span style={styles.footerLink} onClick={() => setLegalDoc('privacy')}>מדיניות פרטיות</span> | 
           <span style={styles.footerLink} onClick={() => setLegalDoc('accessibility')}>הצהרת נגישות</span>
         </div>
+
+        {/* מודאל "מה חדש" ללקוח */}
+        {showWhatsNewModal && (
+          <div style={styles.overlay}>
+             <div style={styles.legalModal}>
+                <h2 style={{marginTop: 0, color: '#9c88ff'}}>✨ מה חדש?</h2>
+                <div style={{textAlign: 'right', whiteSpace: 'pre-line', lineHeight: '1.6', color: '#576574', marginBottom: '20px', fontSize: '1rem'}}>
+                  {whatsNewText}
+                </div>
+                <button style={{...styles.primaryBtn, backgroundColor: '#9c88ff', boxShadow: '0 4px 0 #8c7ae6'}} onClick={() => setShowWhatsNewModal(false)}>איזה יופי!</button>
+             </div>
+          </div>
+        )}
 
         {showCookieConsent && (
           <div style={styles.cookieBanner}>
@@ -861,13 +972,33 @@ function App() {
   if (appState === 'login') {
     return (
       <div style={styles.containerFixed}>
-        <div style={styles.card}>
+        <div style={{
+            ...styles.card,
+            marginTop: isKeyboardOpen ? '-50px' : '0',
+            transition: 'all 0.3s ease'
+        }}>
           <h2 style={styles.title}>כניסה למשחק</h2>
-          <input type="text" placeholder="שם פרטי (חובה תמיד!)" value={loginName} onChange={(e) => setLoginName(e.target.value)} style={styles.input} />
-          <input type="text" placeholder="טלפון או אימייל (חובה)" value={loginContact} onChange={(e) => setLoginContact(e.target.value)} style={styles.input} />
+          <input 
+            type="text" 
+            placeholder="שם פרטי (חובה תמיד!)" 
+            value={loginName} 
+            onChange={(e) => setLoginName(e.target.value)} 
+            onFocus={() => setIsKeyboardOpen(true)}
+            onBlur={() => setIsKeyboardOpen(false)}
+            style={styles.input} 
+          />
+          <input 
+            type="text" 
+            placeholder="טלפון או אימייל (חובה)" 
+            value={loginContact} 
+            onChange={(e) => setLoginContact(e.target.value)} 
+            onFocus={() => setIsKeyboardOpen(true)}
+            onBlur={() => setIsKeyboardOpen(false)}
+            style={styles.input} 
+          />
           {loginError && <p style={{color:'red', fontSize:'0.9rem', margin: '5px 0'}}>{loginError}</p>}
           <button style={styles.primaryBtn} onClick={handleLoginOrRegister} disabled={loading}>{loading ? 'מתחבר...' : 'היכנס למשחק'}</button>
-          <button style={styles.secondaryBtn} onClick={() => setAppState('menu')}>ביטול</button>
+          <button style={{...styles.secondaryBtn, marginTop: '10px'}} onClick={() => setAppState('menu')}>ביטול</button>
         </div>
       </div>
     );
@@ -891,7 +1022,6 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
-        {/* הוספנו inputMode="text" כדי לאלץ מקלדת אותיות, בשילוב עם lang ו-dir לעברית */}
         <input 
            ref={inputRef}
            type="text"
