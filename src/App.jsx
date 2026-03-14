@@ -30,7 +30,7 @@ function App() {
   const [cipherMap, setCipherMap] = useState({});
   const [userGuesses, setUserGuesses] = useState({}); 
   const [selectedNumber, setSelectedNumber] = useState(null);
-  const [selectedIndex, setSelectedIndex] = useState(null); // הוספת סמן חכם חדש למעקב אחר מיקום התיבה
+  const [selectedIndex, setSelectedIndex] = useState(null); 
   const [correctCiphers, setCorrectCiphers] = useState([]); 
   const [hintsUsedInRound, setHintsUsedInRound] = useState(0); 
 
@@ -82,6 +82,8 @@ function App() {
   const [adminWhatsNewInput, setAdminWhatsNewInput] = useState('');
   const [showVisitsModal, setShowVisitsModal] = useState(false);
   const [visitStats, setVisitStats] = useState({ today: 0, week: 0, month: 0 });
+
+  const syncTimeoutRef = useRef(null);
 
   const showToast = (msg) => {
     if (toastTimeout) clearTimeout(toastTimeout);
@@ -192,14 +194,17 @@ function App() {
     setShowCookieConsent(false);
   };
 
-  const syncPlayerToDB = async (updatedFields) => {
+  const syncPlayerToDB = (updatedFields) => {
     if (player?.id) {
-      const { error } = await supabase.from('players').update(updatedFields).eq('id', player.id);
-      if (!error) {
         const updatedPlayer = { ...player, ...updatedFields };
         localStorage.setItem('crypto_player_session', JSON.stringify(updatedPlayer));
         setPlayer(updatedPlayer);
-      }
+        
+        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        
+        syncTimeoutRef.current = setTimeout(async () => {
+            await supabase.from('players').update(updatedFields).eq('id', player.id);
+        }, 800);
     }
   };
 
@@ -219,18 +224,15 @@ function App() {
     updateCategoryStats({ score: Math.max(0, currentScore + amount) });
   };
 
-  // פונקציית איתור תיבה ריקה הבאה בסדר הרציף (כולל מיקום הסמן)
   const findNextEmptyBox = (text, cMap, correctList, initIndices, startIdx = -1) => {
     if (!text) return null;
     const chars = text.split('');
     
-    // סריקה קדימה מהמיקום הנוכחי
     for (let i = startIdx + 1; i < chars.length; i++) {
         if (chars[i] !== ' ' && !initIndices.includes(i) && !correctList.includes(cMap[chars[i]])) {
             return { index: i, num: cMap[chars[i]] };
         }
     }
-    // אם לא נמצא, סריקה מההתחלה עד המיקום הנוכחי
     for (let i = 0; i <= startIdx; i++) {
         if (chars[i] !== ' ' && !initIndices.includes(i) && !correctList.includes(cMap[chars[i]])) {
             return { index: i, num: cMap[chars[i]] };
@@ -240,6 +242,8 @@ function App() {
   };
 
   const generateCipherAndStart = (text, loadedProgress = null) => {
+    setShowCycleResetMsg(false); 
+    
     if (loadedProgress) {
       setCipherMap(loadedProgress.cipherMap);
       setUserGuesses(loadedProgress.userGuesses);
@@ -277,7 +281,6 @@ function App() {
     const charFrequency = {};
     textNoSpaces.split('').forEach(char => { charFrequency[char] = (charFrequency[char] || 0) + 1; });
     
-    // שובר שוויון אקראי: מונע מצב שבו תמיד האות הראשונה נחשפת אם יש כמה אותיות באותה תדירות
     const charFreqArr = uniqueChars.map(char => ({ char, freq: charFrequency[char], rand: Math.random() }));
     charFreqArr.sort((a, b) => {
         if (b.freq !== a.freq) return b.freq - a.freq;
@@ -376,9 +379,7 @@ function App() {
 
         if (currentCycle >= 3) {
             currentCycle = 0;
-            if (globalHintCost > 1) {
-              triggerAlert = true;
-            }
+            triggerAlert = true;
             nextCost = 1;
         }
 
@@ -506,7 +507,6 @@ function App() {
     }
   };
 
-  // ניהול מחיקה (Backspace) ישירות דרך אירוע מקלדת - פותר את הבאג!
   const handleKeyDown = (e) => {
     if (e.key === 'Backspace' || e.keyCode === 8) {
       e.preventDefault();
@@ -514,10 +514,8 @@ function App() {
       
       const currentGuess = userGuesses[selectedNumber];
       if (currentGuess) {
-          // מחיקה ראשונה: מנקה את התיבה הנוכחית
           handleVirtualKeyPress('');
       } else {
-          // מחיקה שנייה (כשהתיבה ריקה): הולך אחורה לתיבה הקודמת
           const chars = currentPhrase.text.split('');
           for (let i = selectedIndex - 1; i >= 0; i--) {
               if (chars[i] !== ' ' && !initialIndices.includes(i)) {
@@ -530,13 +528,23 @@ function App() {
     }
   };
 
-  // האזנה להקלדות רגילות
   const handleNativeInput = (e) => {
     const val = e.target.value;
     if (val === '') { 
-        // במקרה וה-onKeyDown פספס מסיבה כלשהי (מקלדות מיוחדות)
-        if (selectedNumber !== null && userGuesses[selectedNumber]) {
-            handleVirtualKeyPress('');
+        if (selectedNumber !== null && selectedIndex !== null) {
+            const currentGuess = userGuesses[selectedNumber];
+            if (currentGuess) {
+                handleVirtualKeyPress('');
+            } else {
+                const chars = currentPhrase.text.split('');
+                for (let i = selectedIndex - 1; i >= 0; i--) {
+                    if (chars[i] !== ' ' && !initialIndices.includes(i)) {
+                        setSelectedNumber(cipherMap[chars[i]]);
+                        setSelectedIndex(i);
+                        break;
+                    }
+                }
+            }
         }
         setHiddenInputValue(' '); 
         return;
@@ -551,7 +559,7 @@ function App() {
   const handleBoxClick = (index, num, isInitial) => {
     if (!isInitial) {
         setSelectedNumber(num);
-        setSelectedIndex(index); // שמירת מיקום הסמן המדויק
+        setSelectedIndex(index); 
         if (inputRef.current) {
             inputRef.current.focus();
         }
