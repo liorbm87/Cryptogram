@@ -54,6 +54,14 @@ function App() {
   const [showCookieConsent, setShowCookieConsent] = useState(false);
   const [legalDoc, setLegalDoc] = useState(null); 
 
+  // --- פאנל ניהול נסתר (חדש!) ---
+  const [showAdminAuth, setShowAdminAuth] = useState(false);
+  const [adminPasscode, setAdminPasscode] = useState('');
+  const [adminPlayers, setAdminPlayers] = useState([]);
+  const [adminSearch, setAdminSearch] = useState('');
+  const [selectedAdminPlayer, setSelectedAdminPlayer] = useState(null);
+  const [adminEditingStats, setAdminEditingStats] = useState({});
+
   // --- זיכרון הלקוח וקוקיז (Persistence) ---
   useEffect(() => {
     const savedPlayer = localStorage.getItem('crypto_player_session');
@@ -424,7 +432,7 @@ function App() {
     });
   };
 
-  // --- אימות מחמיר ---
+  // --- אימות מחמיר עם עדכון זמן כניסה ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
     const name = loginName.trim();
@@ -435,6 +443,8 @@ function App() {
     if (!name) return setLoginError('חובה להזין שם פרטי!');
 
     setLoading(true); setLoginError('');
+    const now = new Date().toISOString(); // זמן נוכחי לשמירת הכניסה
+
     const { data: existingPlayer } = await supabase.from('players').select('*').eq('contact_info', contact).single();
 
     if (existingPlayer) {
@@ -442,9 +452,14 @@ function App() {
         setLoginError('השם אינו תואם לפרטי ההתקשרות הקיימים במערכת.');
         setLoading(false); return;
       }
+      
+      // עדכון זמן כניסה אחרון בשרת
+      await supabase.from('players').update({ last_login: now }).eq('id', existingPlayer.id);
+      
       existingPlayer.completed_phrases = existingPlayer.completed_phrases || [];
       existingPlayer.saved_progress = existingPlayer.saved_progress || {};
       existingPlayer.category_stats = existingPlayer.category_stats || {};
+      existingPlayer.last_login = now;
       
       setPlayer(existingPlayer); 
       localStorage.setItem('crypto_player_session', JSON.stringify(existingPlayer));
@@ -456,7 +471,8 @@ function App() {
         score: 0, 
         completed_phrases: [], 
         saved_progress: {}, 
-        category_stats: {} 
+        category_stats: {},
+        last_login: now
       };
       const { data: newP, error } = await supabase.from('players').insert([newPlayerData]).select().single();
       if (!error) {
@@ -491,6 +507,50 @@ function App() {
     
     return Math.max(16, Math.min(baseSize, maxAllowedSize));
   };
+
+  // --- לוגיקת פאנל הניהול הנסתר (חדש!) ---
+  const handleAdminAuth = async () => {
+    if (adminPasscode === '1411') {
+      setLoading(true);
+      // משיכת כל השחקנים מסודרים לפי זמן כניסה יורד
+      const { data } = await supabase.from('players').select('*').order('last_login', { ascending: false, nullsFirst: false });
+      if (data) setAdminPlayers(data);
+      setShowAdminAuth(false);
+      setAdminPasscode('');
+      setAppState('admin');
+      setLoading(false);
+    } else {
+      alert('קוד שגוי!');
+      setAdminPasscode('');
+    }
+  };
+
+  const openAdminEdit = (p) => {
+    setSelectedAdminPlayer(p);
+    setAdminEditingStats(p.category_stats || {});
+  };
+
+  const handleAdminScoreChange = (key, newScore) => {
+    setAdminEditingStats(prev => ({
+      ...prev,
+      [key]: { ...(prev[key] || {hint_cost: 1, cycle: 0}), score: Number(newScore) }
+    }));
+  };
+
+  const saveAdminEdits = async () => {
+    await supabase.from('players').update({ category_stats: adminEditingStats }).eq('id', selectedAdminPlayer.id);
+    setAdminPlayers(prev => prev.map(p => p.id === selectedAdminPlayer.id ? { ...p, category_stats: adminEditingStats } : p));
+    setSelectedAdminPlayer(null);
+    alert('הניקוד עודכן בהצלחה!');
+  };
+
+  // פונקציית עזר להצגת תאריך יפה
+  const formatDateTime = (isoString) => {
+    if (!isoString) return 'לא ידוע';
+    const date = new Date(isoString);
+    return date.toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
 
   // --- תצוגות מודאלים משפטיים ---
   const renderLegalModal = () => {
@@ -537,6 +597,69 @@ function App() {
 
   // --- מסכים ---
 
+  // פאנל הניהול הנסתר (Admin Panel)
+  if (appState === 'admin') {
+    const filteredPlayers = adminPlayers.filter(p => 
+      (p.first_name || '').includes(adminSearch) || (p.contact_info || '').includes(adminSearch)
+    );
+
+    return (
+      <div style={styles.containerFixed}>
+        <div style={{...styles.card, width: '95%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', padding: '20px'}}>
+          <h2 style={{color: '#2f3542', margin: '0 0 15px 0'}}>ניהול מערכת 🕵️‍♂️</h2>
+          <button style={{...styles.secondaryBtn, marginBottom: '15px'}} onClick={() => setAppState('menu')}>חזור לתפריט</button>
+          
+          <input 
+            type="text" 
+            placeholder="חיפוש לפי שם או טלפון..." 
+            value={adminSearch} 
+            onChange={(e) => setAdminSearch(e.target.value)} 
+            style={styles.input} 
+          />
+
+          <div style={{marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '10px'}}>
+            {filteredPlayers.map(p => (
+              <div key={p.id} style={styles.adminPlayerCard} onClick={() => openAdminEdit(p)}>
+                <div style={{fontWeight: 'bold', color: '#2f3542'}}>{p.first_name}</div>
+                <div style={{fontSize: '0.85rem', color: '#576574'}}>{p.contact_info}</div>
+                <div style={{fontSize: '0.75rem', color: '#a4b0be', marginTop: '5px'}}>
+                  כניסה אחרונה: {formatDateTime(p.last_login)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* מודאל עריכת ניקוד למנהל */}
+        {selectedAdminPlayer && (
+          <div style={styles.overlay}>
+            <div style={styles.legalModal}>
+              <h3 style={{marginTop: 0}}>עריכת ניקוד: {selectedAdminPlayer.first_name}</h3>
+              <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', maxHeight: '40vh', overflowY: 'auto'}}>
+                {Object.keys(adminEditingStats).length === 0 ? <p>הלקוח טרם צבר ניקוד בשום קטגוריה.</p> : null}
+                {Object.entries(adminEditingStats).map(([key, data]) => (
+                  <div key={key} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f2f6', padding: '10px', borderRadius: '8px'}}>
+                    <span style={{fontSize: '0.9rem', fontWeight: 'bold'}}>{key}</span>
+                    <input 
+                      type="number" 
+                      value={data.score} 
+                      onChange={(e) => handleAdminScoreChange(key, e.target.value)}
+                      style={{width: '60px', padding: '5px', borderRadius: '5px', border: '1px solid #ccc', textAlign: 'center'}}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div style={{display: 'flex', gap: '10px'}}>
+                <button style={styles.primaryBtn} onClick={saveAdminEdits}>שמור שינויים</button>
+                <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none'}} onClick={() => setSelectedAdminPlayer(null)}>ביטול</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (appState === 'menu') {
     return (
       <div style={styles.containerFixed}>
@@ -545,7 +668,8 @@ function App() {
           <img 
             src="https://i.postimg.cc/MKHZBh1K/1000182904-removebg-preview.png" 
             alt="מפענחי הצפנים" 
-            style={{ width: '130px', height: 'auto', margin: '0 auto 10px auto', display: 'block' }} 
+            style={{ width: '130px', height: 'auto', margin: '0 auto 10px auto', display: 'block', cursor: 'pointer' }} 
+            onDoubleClick={() => setShowAdminAuth(true)} /* טריגר הניהול הנסתר! */
           />
           <h1 style={styles.title}>מפענחי הצפנים</h1>
 
@@ -608,6 +732,26 @@ function App() {
           </div>
         )}
 
+        {/* מודאל הזנת קוד מנהל */}
+        {showAdminAuth && (
+          <div style={styles.overlay}>
+            <div style={styles.modal}>
+              <h3 style={{marginTop: 0, color: '#2f3542'}}>אזור ניהול</h3>
+              <input 
+                type="password" 
+                placeholder="הכנס קוד סודי" 
+                value={adminPasscode} 
+                onChange={(e) => setAdminPasscode(e.target.value)} 
+                style={{...styles.input, textAlign: 'center', letterSpacing: '5px'}} 
+              />
+              <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
+                <button style={styles.primaryBtn} onClick={handleAdminAuth}>כניסה</button>
+                <button style={{...styles.secondaryBtn, backgroundColor: '#a4b0be', boxShadow: 'none'}} onClick={() => {setShowAdminAuth(false); setAdminPasscode('');}}>ביטול</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {renderLegalModal()}
 
         {showGuestWarning && (
@@ -654,7 +798,7 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
-        {/* הוספנו lang="he" ו-dir="rtl" כדי שהמקלדת תמיד תיפתח בעברית! */}
+        {/* lang="he" ו-dir="rtl" מחייבים את המקלדת להיפתח בעברית */}
         <input 
            ref={inputRef}
            type="text"
@@ -686,7 +830,6 @@ function App() {
             <div style={styles.hintContainer}>
                <div style={{display: 'flex', justifyContent: 'center', gap: '10px'}}>
                  
-                 {/* כפתור רמז מעודכן שלא מוריד מקלדת */}
                  <button 
                    style={{...styles.hintBtn, animation: forcedHintFor ? 'pulse 1.5s infinite' : 'none'}} 
                    onPointerDown={(e) => {
@@ -697,7 +840,6 @@ function App() {
                    💡 {forcedHintFor ? 'שחרר נעילה!' : `רמז (${hintsUsedInRound === 0 ? 'חינם' : '-' + globalHintCost})`}
                  </button>
                  
-                 {/* כפתור נקה טעויות מעודכן שלא מוריד מקלדת */}
                  {hasMistakes && (
                    <button 
                      style={styles.clearBtn} 
@@ -842,7 +984,10 @@ const styles = {
   checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#1dd1a1', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
   secretNumber: { fontWeight: 'bold' },
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
-  modal: { backgroundColor: '#fff', padding: '30px', borderRadius: '25px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(0,0,0,0.3)' }
+  modal: { backgroundColor: '#fff', padding: '30px', borderRadius: '25px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(0,0,0,0.3)' },
+
+  // עיצוב כרטיסיות הלקוחות בפאנל הניהול
+  adminPlayerCard: { backgroundColor: '#fff', border: '1px solid #dfe6e9', borderRadius: '10px', padding: '10px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }
 };
 
 export default App;
