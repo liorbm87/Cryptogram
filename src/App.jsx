@@ -60,6 +60,11 @@ function App() {
   const [showCookieConsent, setShowCookieConsent] = useState(false);
   const [legalDoc, setLegalDoc] = useState(null); 
 
+  // --- התקנת אפליקציה (PWA) ---
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
+  const [showIosInstall, setShowIosInstall] = useState(false);
+
   // --- פאנל ניהול נסתר ועדכונים ---
   const [showAdminAuth, setShowAdminAuth] = useState(false);
   const [adminPasscode, setAdminPasscode] = useState('');
@@ -85,6 +90,22 @@ function App() {
   };
 
   useEffect(() => {
+    // בדיקה האם האפליקציה כבר מותקנת (PWA)
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+      setIsAppInstalled(true);
+    }
+
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', () => {
+      setIsAppInstalled(true);
+      setInstallPrompt(null);
+    });
+
     const initApp = async () => {
       const savedPlayer = localStorage.getItem('crypto_player_session');
       if (savedPlayer) {
@@ -116,7 +137,29 @@ function App() {
     };
 
     initApp();
+
+    return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (installPrompt) {
+      installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsAppInstalled(true);
+      }
+      setInstallPrompt(null);
+    } else {
+      const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+      if (isIos) {
+        setShowIosInstall(true);
+      } else {
+        alert("כדי להתקין, פתח את תפריט הדפדפן ולחץ על 'הוסף למסך הבית' או 'Install App'.");
+      }
+    }
+  };
 
   const updateLoginHistoryInDB = async (p) => {
     const now = new Date();
@@ -233,7 +276,6 @@ function App() {
     const charFrequency = {};
     textNoSpaces.split('').forEach(char => { charFrequency[char] = (charFrequency[char] || 0) + 1; });
     
-    // שובר שוויון אקראי: אם שתי אותיות מופיעות אותו מספר פעמים, הסדר ביניהן יהיה מקרי
     const charFreqArr = uniqueChars.map(char => ({ char, freq: charFrequency[char], rand: Math.random() }));
     charFreqArr.sort((a, b) => {
         if (b.freq !== a.freq) return b.freq - a.freq;
@@ -324,10 +366,11 @@ function App() {
         let nextCost = globalHintCost;
         let triggerAlert = false;
 
-        // מתאפס בכל 3 פתרונות, לא משנה מה המחיר הנוכחי
         if (currentCycle >= 3) {
             currentCycle = 0;
-            triggerAlert = true;
+            if (globalHintCost > 1) {
+              triggerAlert = true;
+            }
             nextCost = 1;
         }
 
@@ -371,9 +414,7 @@ function App() {
       return;
     }
 
-    if (isFirstTimeClue) {
-        updateCategoryStats({ first_clue_given: true });
-    }
+    let nextCost = cost === 0 ? globalHintCost : Math.min(10, globalHintCost + 1);
 
     if (forcedHintFor !== null) {
       const targetToSolve = forcedHintFor;
@@ -382,7 +423,6 @@ function App() {
       setForcedHintFor(null); 
       handleVirtualKeyPress(correctLetter, targetToSolve, true);
       
-      const nextCost = hintsUsedInRound > 0 ? Math.min(10, globalHintCost + 1) : globalHintCost;
       updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
       setHintsUsedInRound(prev => prev + 1);
       
@@ -402,7 +442,6 @@ function App() {
       const randomChar = currentPhrase.text[randomIdx];
       handleVirtualKeyPress(randomChar, cipherMap[randomChar], true); 
       
-      const nextCost = hintsUsedInRound > 0 ? Math.min(10, globalHintCost + 1) : globalHintCost;
       updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
       setHintsUsedInRound(prev => prev + 1);
     }
@@ -661,6 +700,35 @@ function App() {
     alert('הניקוד עודכן בהצלחה!');
   };
 
+  const handleAdminResetUser = async () => {
+    if (!window.confirm(`האם אתה בטוח שברצונך לאפס לחלוטין את ${selectedAdminPlayer.first_name}? פעולה זו תמחק ניקוד והתקדמות.`)) return;
+    
+    const resetStats = {
+        'ילדים_easy': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
+        'ילדים_medium': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
+        'ילדים_hard': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
+        'נוער_easy': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
+        'נוער_medium': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
+        'נוער_hard': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
+        'מבוגרים_easy': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
+        'מבוגרים_medium': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
+        'מבוגרים_hard': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false }
+    };
+
+    const resetData = {
+        score: 0,
+        completed_phrases: [],
+        saved_progress: {},
+        category_stats: resetStats
+    };
+
+    await supabase.from('players').update(resetData).eq('id', selectedAdminPlayer.id);
+    
+    setAdminPlayers(prev => prev.map(p => p.id === selectedAdminPlayer.id ? { ...p, ...resetData } : p));
+    setAdminEditingStats(resetStats);
+    alert('המשתמש אופס בהצלחה וחזר לנקודת ההתחלה!');
+  };
+
   const formatDateTime = (isoString) => {
     if (!isoString) return 'לא נרשמה כניסה';
     const date = new Date(isoString);
@@ -828,9 +896,12 @@ function App() {
                 </div>
               )}
               
-              <div style={{display: 'flex', gap: '10px'}}>
-                {!showLoginHistory && <button style={styles.primaryBtn} onClick={saveAdminEdits}>שמירת זרעים</button>}
-                <button style={{...styles.secondaryBtn, backgroundColor: '#D4A373', boxShadow: 'none', flex: 1}} onClick={() => setSelectedAdminPlayer(null)}>סגירה</button>
+              <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                <div style={{display: 'flex', gap: '10px'}}>
+                   {!showLoginHistory && <button style={{...styles.primaryBtn, flex: 1}} onClick={saveAdminEdits}>שמירת זרעים</button>}
+                   <button style={{...styles.secondaryBtn, backgroundColor: '#D4A373', boxShadow: 'none', flex: 1}} onClick={() => setSelectedAdminPlayer(null)}>סגירה</button>
+                </div>
+                {!showLoginHistory && <button style={{...styles.primaryBtn, backgroundColor: '#ff6b6b', boxShadow: '0 4px 0 #ee5253', marginTop: '5px'}} onClick={handleAdminResetUser}>איפוס משתמש למצב התחלתי</button>}
               </div>
             </div>
           </div>
@@ -844,6 +915,10 @@ function App() {
       <div style={styles.containerFixed}>
         <div style={styles.card}>
           
+          {!isAppInstalled && (
+             <button style={styles.installBtn} onClick={handleInstallClick}>⬇️ הורדת האפליקציה</button>
+          )}
+
           <img 
             src="https://i.postimg.cc/MKHZBh1K/1000182904-removebg-preview.png" 
             alt="Cryptosophia" 
@@ -918,6 +993,21 @@ function App() {
           <span style={styles.footerLink} onClick={() => setLegalDoc('privacy')}>מדיניות פרטיות</span> | 
           <span style={styles.footerLink} onClick={() => setLegalDoc('accessibility')}>הצהרת נגישות</span>
         </div>
+
+        {showIosInstall && (
+          <div style={styles.overlay}>
+             <div style={styles.legalModal}>
+                <h2 style={{marginTop: 0, color: '#5C6B5E'}}>📱 התקנה באייפון</h2>
+                <div style={{textAlign: 'right', color: '#7E8B80', marginBottom: '20px', fontSize: '1rem', lineHeight: '1.6'}}>
+                  כדי להתקין את המשחק כאפליקציה על האייפון שלכם:<br/><br/>
+                  1. לחצו על כפתור ה<b>שיתוף</b> בתחתית המסך (ריבוע עם חץ עולה).<br/>
+                  2. גללו למטה ובחרו באפשרות <b>"הוסף למסך הבית"</b> (Add to Home Screen).<br/>
+                  3. לחצו על <b>הוסף</b> בפינה העליונה.
+                </div>
+                <button style={styles.primaryBtn} onClick={() => setShowIosInstall(false)}>הבנתי, תודה!</button>
+             </div>
+          </div>
+        )}
 
         {showWhatsNewModal && (
           <div style={styles.overlay}>
@@ -1278,6 +1368,7 @@ const styles = {
   miniGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '15px' },
   miniBtn: { backgroundColor: '#F3F0E9', color: '#5C6B5E', border: '1px solid #D5D0C5', padding: '6px 4px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' },
   payboxLightBlue: { backgroundColor: '#54a0ff', color: '#fff', border: 'none', padding: '6px 4px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 3px 0 #2e86de' },
+  installBtn: { backgroundColor: '#F3F0E9', color: '#5C6B5E', border: '1px solid #D5D0C5', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', margin: '0 auto 10px auto', display: 'block', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' },
 
   footer: { position: 'absolute', bottom: '15px', display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#A3B1A6' },
   footerLink: { cursor: 'pointer', textDecoration: 'underline' },
