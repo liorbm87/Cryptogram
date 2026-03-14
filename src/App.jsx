@@ -30,6 +30,7 @@ function App() {
   const [cipherMap, setCipherMap] = useState({});
   const [userGuesses, setUserGuesses] = useState({}); 
   const [selectedNumber, setSelectedNumber] = useState(null);
+  const [selectedIndex, setSelectedIndex] = useState(null); // הוספת סמן חכם חדש למעקב אחר מיקום התיבה
   const [correctCiphers, setCorrectCiphers] = useState([]); 
   const [hintsUsedInRound, setHintsUsedInRound] = useState(0); 
 
@@ -90,7 +91,6 @@ function App() {
   };
 
   useEffect(() => {
-    // בדיקה האם האפליקציה כבר מותקנת (PWA)
     if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
       setIsAppInstalled(true);
     }
@@ -219,28 +219,23 @@ function App() {
     updateCategoryStats({ score: Math.max(0, currentScore + amount) });
   };
 
-  const getNextAvailableNumber = (phraseText, cMap, correctList, initIndices, currentNum = null) => {
-    if (!phraseText) return null;
-    const chars = phraseText.split('');
-    let startIndex = 0;
+  // פונקציית איתור תיבה ריקה הבאה בסדר הרציף (כולל מיקום הסמן)
+  const findNextEmptyBox = (text, cMap, correctList, initIndices, startIdx = -1) => {
+    if (!text) return null;
+    const chars = text.split('');
     
-    if (currentNum !== null) {
-        const currIdx = chars.findIndex((c, i) => c !== ' ' && cMap[c] === currentNum && !initIndices.includes(i));
-        if (currIdx !== -1) startIndex = currIdx + 1;
+    // סריקה קדימה מהמיקום הנוכחי
+    for (let i = startIdx + 1; i < chars.length; i++) {
+        if (chars[i] !== ' ' && !initIndices.includes(i) && !correctList.includes(cMap[chars[i]])) {
+            return { index: i, num: cMap[chars[i]] };
+        }
     }
-
-    for (let i = startIndex; i < chars.length; i++) {
-        if (chars[i] === ' ') continue;
-        const num = cMap[chars[i]];
-        if (!initIndices.includes(i) && !correctList.includes(num)) return num;
+    // אם לא נמצא, סריקה מההתחלה עד המיקום הנוכחי
+    for (let i = 0; i <= startIdx; i++) {
+        if (chars[i] !== ' ' && !initIndices.includes(i) && !correctList.includes(cMap[chars[i]])) {
+            return { index: i, num: cMap[chars[i]] };
+        }
     }
-
-    for (let i = 0; i < startIndex; i++) {
-        if (chars[i] === ' ') continue;
-        const num = cMap[chars[i]];
-        if (!initIndices.includes(i) && !correctList.includes(num)) return num;
-    }
-
     return null;
   };
 
@@ -255,8 +250,14 @@ function App() {
       setForcedHintFor(loadedProgress.forcedHintFor);
       setHintsUsedInRound(loadedProgress.hintsUsedInRound);
       
-      const nextAvail = getNextAvailableNumber(text, loadedProgress.cipherMap, loadedProgress.correctCiphers, loadedProgress.initialIndices || [], null);
-      setSelectedNumber(nextAvail);
+      const nextEmpty = findNextEmptyBox(text, loadedProgress.cipherMap, loadedProgress.correctCiphers, loadedProgress.initialIndices || [], -1);
+      if (nextEmpty) {
+          setSelectedNumber(nextEmpty.num);
+          setSelectedIndex(nextEmpty.index);
+      } else {
+          setSelectedNumber(null);
+          setSelectedIndex(null);
+      }
       setShowWinModal(false);
       return;
     }
@@ -276,6 +277,7 @@ function App() {
     const charFrequency = {};
     textNoSpaces.split('').forEach(char => { charFrequency[char] = (charFrequency[char] || 0) + 1; });
     
+    // שובר שוויון אקראי: מונע מצב שבו תמיד האות הראשונה נחשפת אם יש כמה אותיות באותה תדירות
     const charFreqArr = uniqueChars.map(char => ({ char, freq: charFrequency[char], rand: Math.random() }));
     charFreqArr.sort((a, b) => {
         if (b.freq !== a.freq) return b.freq - a.freq;
@@ -307,8 +309,14 @@ function App() {
     setForcedHintFor(null);
     setHintsUsedInRound(0); 
     
-    const firstAvailable = getNextAvailableNumber(text, newCipher, [], newInitialIndices, null);
-    setSelectedNumber(firstAvailable);
+    const firstEmpty = findNextEmptyBox(text, newCipher, [], newInitialIndices, -1);
+    if (firstEmpty) {
+        setSelectedNumber(firstEmpty.num);
+        setSelectedIndex(firstEmpty.index);
+    } else {
+        setSelectedNumber(null);
+        setSelectedIndex(null);
+    }
     setShowWinModal(false);
   };
 
@@ -471,8 +479,11 @@ function App() {
       }
       setUserGuesses(prev => ({ ...prev, [targetNum]: letter }));
       
-      const nextNum = getNextAvailableNumber(currentPhrase.text, cipherMap, currentCorrectCiphers, initialIndices, targetNum);
-      if (nextNum !== null) setSelectedNumber(nextNum);
+      const nextEmpty = findNextEmptyBox(currentPhrase.text, cipherMap, currentCorrectCiphers, initialIndices, selectedIndex !== null ? selectedIndex : -1);
+      if (nextEmpty) {
+          setSelectedNumber(nextEmpty.num);
+          setSelectedIndex(nextEmpty.index);
+      }
       
     } else {
       if (letter === '') {
@@ -495,23 +506,52 @@ function App() {
     }
   };
 
+  // ניהול מחיקה (Backspace) ישירות דרך אירוע מקלדת - פותר את הבאג!
+  const handleKeyDown = (e) => {
+    if (e.key === 'Backspace' || e.keyCode === 8) {
+      e.preventDefault();
+      if (selectedNumber === null || selectedIndex === null) return;
+      
+      const currentGuess = userGuesses[selectedNumber];
+      if (currentGuess) {
+          // מחיקה ראשונה: מנקה את התיבה הנוכחית
+          handleVirtualKeyPress('');
+      } else {
+          // מחיקה שנייה (כשהתיבה ריקה): הולך אחורה לתיבה הקודמת
+          const chars = currentPhrase.text.split('');
+          for (let i = selectedIndex - 1; i >= 0; i--) {
+              if (chars[i] !== ' ' && !initialIndices.includes(i)) {
+                  setSelectedNumber(cipherMap[chars[i]]);
+                  setSelectedIndex(i);
+                  break;
+              }
+          }
+      }
+    }
+  };
+
+  // האזנה להקלדות רגילות
   const handleNativeInput = (e) => {
     const val = e.target.value;
     if (val === '') { 
-        handleVirtualKeyPress('');
-        setHiddenInputValue(' '); 
-    } else if (val.length > 1) { 
-        const char = val[val.length - 1];
-        if (/^[\u0590-\u05FF]$/.test(char)) { 
-            handleVirtualKeyPress(char);
+        // במקרה וה-onKeyDown פספס מסיבה כלשהי (מקלדות מיוחדות)
+        if (selectedNumber !== null && userGuesses[selectedNumber]) {
+            handleVirtualKeyPress('');
         }
         setHiddenInputValue(' '); 
+        return;
+    } 
+    const lastChar = val.slice(-1);
+    if (/^[\u0590-\u05FF]$/.test(lastChar)) { 
+        handleVirtualKeyPress(lastChar);
     }
+    setHiddenInputValue(' '); 
   };
 
   const handleBoxClick = (index, num, isInitial) => {
     if (!isInitial) {
         setSelectedNumber(num);
+        setSelectedIndex(index); // שמירת מיקום הסמן המדויק
         if (inputRef.current) {
             inputRef.current.focus();
         }
@@ -677,7 +717,7 @@ function App() {
     allCategories.forEach(c => {
       allLevels.forEach(l => {
         const key = `${c}_${l}`;
-        fullStats[key] = p.category_stats?.[key] || { score: 5, hint_cost: 1, cycle: 0 };
+        fullStats[key] = p.category_stats?.[key] || { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false };
       });
     });
 
@@ -689,7 +729,7 @@ function App() {
   const handleAdminScoreChange = (key, newScore) => {
     setAdminEditingStats(prev => ({
       ...prev,
-      [key]: { ...(prev[key] || {hint_cost: 1, cycle: 0}), score: Number(newScore) }
+      [key]: { ...(prev[key] || {hint_cost: 1, cycle: 0, first_clue_given: false}), score: Number(newScore) }
     }));
   };
 
@@ -1184,6 +1224,7 @@ function App() {
            aria-label="הקלד אותיות בעברית"
            value={hiddenInputValue}
            onChange={handleNativeInput}
+           onKeyDown={handleKeyDown}
            onFocus={() => setIsKeyboardOpen(true)}
            onBlur={() => setIsKeyboardOpen(false)}
            style={{position: 'absolute', top: '50px', left: 0, opacity: 0, width: '1px', height: '1px', border: 'none', padding: 0}}
