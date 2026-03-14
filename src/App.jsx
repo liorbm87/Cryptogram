@@ -54,7 +54,7 @@ function App() {
   const [showCookieConsent, setShowCookieConsent] = useState(false);
   const [legalDoc, setLegalDoc] = useState(null); 
 
-  // --- פאנל ניהול نסתר ---
+  // --- פאנל ניהול נסתר ---
   const [showAdminAuth, setShowAdminAuth] = useState(false);
   const [adminPasscode, setAdminPasscode] = useState('');
   const [adminPlayers, setAdminPlayers] = useState([]);
@@ -62,8 +62,6 @@ function App() {
   const [selectedAdminPlayer, setSelectedAdminPlayer] = useState(null);
   const [adminEditingStats, setAdminEditingStats] = useState({});
   const [showLoginHistory, setShowLoginHistory] = useState(false);
-  
-  // הוספנו משתנה כדי להרים את המודאלים כשהמקלדת נפתחת בניהול
   const [isModalKeyboardOpen, setIsModalKeyboardOpen] = useState(false);
 
   // --- זיכרון הלקוח וקוקיז (Persistence) ---
@@ -76,7 +74,7 @@ function App() {
       p.category_stats = p.category_stats || {};
       setPlayer(p);
       
-      // עדכון שעת כניסה שקטה ברקע כדי שלא נפספס משתמשים חוזרים
+      // עדכון שעת כניסה שקטה עם מניעת הצפה (15 דקות הפרש מינימום בין כניסות)
       updateLoginHistoryInDB(p);
     }
 
@@ -87,16 +85,28 @@ function App() {
   }, []);
 
   const updateLoginHistoryInDB = async (p) => {
-    const now = new Date().toISOString();
-    const { data: dbPlayer } = await supabase.from('players').select('login_history, category_stats').eq('id', p.id).single();
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const { data: dbPlayer } = await supabase.from('players').select('last_login, login_history, category_stats').eq('id', p.id).single();
     
     if (dbPlayer) {
-      const currentHistory = Array.isArray(dbPlayer.login_history) ? dbPlayer.login_history : [];
-      const updatedHistory = [now, ...currentHistory];
-      await supabase.from('players').update({ last_login: now, login_history: updatedHistory }).eq('id', p.id);
+      let currentHistory = Array.isArray(dbPlayer.login_history) ? dbPlayer.login_history : [];
+      let shouldAddToHistory = true;
+
+      // מניעת רענונים מלייצר כפילויות היסטוריה (הפרש של 15 דקות לפחות)
+      if (currentHistory.length > 0) {
+        const lastEntryTime = new Date(currentHistory[0]);
+        const diffInMinutes = (now - lastEntryTime) / (1000 * 60);
+        if (diffInMinutes < 15) {
+          shouldAddToHistory = false;
+        }
+      }
+
+      const updatedHistory = shouldAddToHistory ? [nowIso, ...currentHistory] : currentHistory;
+
+      await supabase.from('players').update({ last_login: nowIso, login_history: updatedHistory }).eq('id', p.id);
       
-      // מעדכן את הסטייט והלוקאל סטורג כדי שיהיו מסונכרנים
-      const updatedPlayer = { ...p, last_login: now, login_history: updatedHistory, category_stats: dbPlayer.category_stats || {} };
+      const updatedPlayer = { ...p, last_login: nowIso, login_history: updatedHistory, category_stats: dbPlayer.category_stats || {} };
       setPlayer(updatedPlayer);
       localStorage.setItem('crypto_player_session', JSON.stringify(updatedPlayer));
     }
@@ -454,7 +464,7 @@ function App() {
     });
   };
 
-  // --- אימות מחמיר עם הוספת היסטוריית כניסות ---
+  // --- אימות מחמיר עם הוספת היסטוריית כניסות מבוקרת ---
   const handleLoginOrRegister = async () => {
     const contact = loginContact.trim();
     const name = loginName.trim();
@@ -465,7 +475,8 @@ function App() {
     if (!name) return setLoginError('חובה להזין שם פרטי!');
 
     setLoading(true); setLoginError('');
-    const now = new Date().toISOString(); 
+    const now = new Date(); 
+    const nowIso = now.toISOString();
 
     const { data: existingPlayer } = await supabase.from('players').select('*').eq('contact_info', contact).single();
 
@@ -476,14 +487,25 @@ function App() {
       }
       
       const currentHistory = Array.isArray(existingPlayer.login_history) ? existingPlayer.login_history : (existingPlayer.last_login ? [existingPlayer.last_login] : []);
-      const updatedHistory = [now, ...currentHistory]; 
+      let shouldAddToHistory = true;
+
+      // בדיקת צינון של 15 דקות
+      if (currentHistory.length > 0) {
+        const lastEntryTime = new Date(currentHistory[0]);
+        const diffInMinutes = (now - lastEntryTime) / (1000 * 60);
+        if (diffInMinutes < 15) {
+          shouldAddToHistory = false;
+        }
+      }
+
+      const updatedHistory = shouldAddToHistory ? [nowIso, ...currentHistory] : currentHistory;
       
-      await supabase.from('players').update({ last_login: now, login_history: updatedHistory }).eq('id', existingPlayer.id);
+      await supabase.from('players').update({ last_login: nowIso, login_history: updatedHistory }).eq('id', existingPlayer.id);
       
       existingPlayer.completed_phrases = existingPlayer.completed_phrases || [];
       existingPlayer.saved_progress = existingPlayer.saved_progress || {};
       existingPlayer.category_stats = existingPlayer.category_stats || {};
-      existingPlayer.last_login = now;
+      existingPlayer.last_login = nowIso;
       existingPlayer.login_history = updatedHistory;
       
       setPlayer(existingPlayer); 
@@ -497,8 +519,8 @@ function App() {
         completed_phrases: [], 
         saved_progress: {}, 
         category_stats: {},
-        last_login: now,
-        login_history: [now]
+        last_login: nowIso,
+        login_history: [nowIso]
       };
       const { data: newP, error } = await supabase.from('players').insert([newPlayerData]).select().single();
       if (!error) {
@@ -556,7 +578,6 @@ function App() {
     const allLevels = ['easy', 'medium', 'hard'];
     const fullStats = {};
     
-    // בונה רשימה של הכל, ומציג 5 נקודות כברירת מחדל אם טרם שיחק
     allCategories.forEach(c => {
       allLevels.forEach(l => {
         const key = `${c}_${l}`;
@@ -870,7 +891,7 @@ function App() {
     return (
       <div style={styles.containerFull}>
         
-        {/* הוספנו inputMode="text" כדי לנסות לאלץ את המקלדת להיפתח בצורה נכונה */}
+        {/* הוספנו inputMode="text" כדי לאלץ מקלדת אותיות, בשילוב עם lang ו-dir לעברית */}
         <input 
            ref={inputRef}
            type="text"
@@ -1057,7 +1078,7 @@ const styles = {
   checkmark: { position: 'absolute', top: '-3px', right: '-3px', color: '#1dd1a1', fontSize: '0.4em', backgroundColor: '#fff', borderRadius: '50%', padding: '1px' },
   secretNumber: { fontWeight: 'bold' },
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, transition: 'all 0.3s ease' },
-  modal: { backgroundColor: '#fff', padding: '30px', borderRadius: '25px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(0,0,0,0.3)' },
+  modal: { backgroundColor: '#fff', padding: '30px', borderRadius: '25px', textAlign: 'center', maxWidth: '300px', boxShadow: '0 15px 30px rgba(0,0,0,0.3)', transition: 'all 0.3s ease' },
 
   adminPlayerCard: { backgroundColor: '#fff', border: '1px solid #dfe6e9', borderRadius: '10px', padding: '10px', textAlign: 'right', cursor: 'pointer', transition: '0.2s', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }
 };
