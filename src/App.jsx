@@ -306,7 +306,6 @@ function App() {
     });
     const sortedCharsByFreq = charFreqArr.map(item => item.char);
 
-    // לוגיקה חדשה לקבלת כמות האותיות החשופות לפי אורך המשפט:
     let numToReveal = 1;
     if (totalLetters <= 3) {
       numToReveal = 1;
@@ -742,8 +741,13 @@ function App() {
     const { data: adminData } = await supabase.from('admin_settings').select('passcode').eq('id', 1).single();
     
     if (adminData && adminData.passcode === adminPasscode) {
-      const { data } = await supabase.from('players').select('*').order('last_login', { ascending: false, nullsFirst: false });
-      if (data) setAdminPlayers(data); 
+      const { data, error } = await supabase.from('players').select('*').order('last_login', { ascending: false, nullsFirst: false });
+      
+      if (error) {
+        alert("שגיאה במשיכת הנתונים. האם הוספת את עמודות ה-last_login ב-Supabase?");
+      } else if (data) {
+        setAdminPlayers(data); 
+      }
       
       await fetchGlobalVisits();
 
@@ -1271,6 +1275,7 @@ function App() {
       <div style={styles.containerFull}>
         {landscapeOverlay}
         
+        {/* הגדרת אנימציית פעימה לפוקוס בדסקטופ */}
         <style>{`
           @keyframes focusPulse {
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(163, 196, 188, 0.5); }
