@@ -42,6 +42,7 @@ function App() {
   const [strikes, setStrikes] = useState({}); 
   const [hintLimits, setHintLimits] = useState({}); 
   const [forcedHintFor, setForcedHintFor] = useState(null); 
+  const [activeBubbleHint, setActiveBubbleHint] = useState(null);
 
   // --- הודעות קופצות (מניעת ירידת מקלדת) ---
   const [toastMsg, setToastMsg] = useState('');
@@ -131,6 +132,7 @@ function App() {
         p.completed_phrases = p.completed_phrases || [];
         p.saved_progress = p.saved_progress || {};
         p.category_stats = p.category_stats || {};
+        p.used_child_hints = p.used_child_hints || {};
         setPlayer(p);
         updateLoginHistoryInDB(p);
       }
@@ -341,6 +343,7 @@ function App() {
     setHintLimits({});
     setForcedHintFor(null);
     setHintsUsedInRound(0); 
+    setActiveBubbleHint(null);
     
     const firstEmpty = findNextEmptyBox(text, newCipher, [], newInitialIndices, -1);
     if (firstEmpty) {
@@ -446,7 +449,7 @@ function App() {
     }
   }, [userGuesses]);
 
-  const applyHint = () => {
+  const applyHint = async () => {
     const isFirstTimeClue = !currentStats.first_clue_given;
     let cost = (hintsUsedInRound === 0 && isFirstTimeClue) ? 0 : globalHintCost;
     
@@ -457,35 +460,73 @@ function App() {
 
     let nextCost = cost === 0 ? globalHintCost : Math.min(10, globalHintCost + 1);
 
+    // מציאת המספר שצריך לתת לו רמז
+    let targetNum = forcedHintFor;
+    if (targetNum === null) {
+      const unGuessedIndices = currentPhrase.text.split('').map((char, index) => {
+        if (char === ' ') return -1;
+        if (initialIndices.includes(index)) return -1;
+        if (userGuesses[cipherMap[char]] === char) return -1;
+        return index;
+      }).filter(i => i !== -1);
+      
+      if (unGuessedIndices.length > 0) {
+        const randomIdx = unGuessedIndices[Math.floor(Math.random() * unGuessedIndices.length)];
+        targetNum = cipherMap[currentPhrase.text[randomIdx]];
+      }
+    }
+
+    if (targetNum === null) return;
+    const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetNum);
+
+    // אם אנחנו בקטגוריית ילדים - נשלוף רמז חזותי ולא נחשוף מיד את האות
+    if (selectedCategory === 'ילדים') {
+        const { data: hints } = await supabase.from('children_letter_hints')
+            .select('*')
+            .eq('letter', correctLetter)
+            .eq('level', selectedLevel);
+            
+        if (hints && hints.length > 0) {
+            let currentUsed = (player ? player.used_child_hints : localStats.used_child_hints) || {};
+            let usedForLetter = currentUsed[`${correctLetter}_${selectedLevel}`] || [];
+            
+            let unusedHints = hints.filter(h => !usedForLetter.includes(h.id));
+            if (unusedHints.length === 0) {
+                usedForLetter = [];
+                unusedHints = hints;
+            }
+            
+            const randomHint = unusedHints[Math.floor(Math.random() * unusedHints.length)];
+            const finalHintText = randomHint.hint_text.replace('{num}', targetNum);
+            
+            setActiveBubbleHint({ num: targetNum, text: finalHintText });
+            
+            usedForLetter.push(randomHint.id);
+            const newUsed = { ...currentUsed, [`${correctLetter}_${selectedLevel}`]: usedForLetter };
+            
+            if (player) {
+                const updatedPlayer = { ...player, used_child_hints: newUsed };
+                setPlayer(updatedPlayer);
+                syncPlayerToDB({ used_child_hints: newUsed });
+            } else {
+                setLocalStats(prev => ({ ...prev, used_child_hints: newUsed }));
+            }
+
+            if (forcedHintFor !== null) setForcedHintFor(null);
+            updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
+            setHintsUsedInRound(prev => prev + 1);
+            return; 
+        }
+    }
+
+    // התנהגות רגילה (נוער, מבוגרים או אם אין רמז ב-DB)
     if (forcedHintFor !== null) {
-      const targetToSolve = forcedHintFor;
-      const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetToSolve);
-      
       setForcedHintFor(null); 
-      handleVirtualKeyPress(correctLetter, targetToSolve, true);
-      
-      updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
-      setHintsUsedInRound(prev => prev + 1);
-      
-      showToast(`האות נחשפה בעדינות 🍃`);
-      return;
     }
-
-    const unGuessedIndices = currentPhrase.text.split('').map((char, index) => {
-      if (char === ' ') return -1;
-      if (initialIndices.includes(index)) return -1;
-      if (userGuesses[cipherMap[char]] === char) return -1;
-      return index;
-    }).filter(i => i !== -1);
-
-    if (unGuessedIndices.length > 0) {
-      const randomIdx = unGuessedIndices[Math.floor(Math.random() * unGuessedIndices.length)];
-      const randomChar = currentPhrase.text[randomIdx];
-      handleVirtualKeyPress(randomChar, cipherMap[randomChar], true); 
-      
-      updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
-      setHintsUsedInRound(prev => prev + 1);
-    }
+    handleVirtualKeyPress(correctLetter, targetNum, true);
+    updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
+    setHintsUsedInRound(prev => prev + 1);
+    showToast(`האות נחשפה בעדינות 🍃`);
   };
 
   const handleVirtualKeyPress = (letter, forcedNum = null, isHint = false) => {
@@ -503,6 +544,9 @@ function App() {
     const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetNum);
     
     if (letter === correctLetter) {
+      if (activeBubbleHint && targetNum === activeBubbleHint.num) {
+          setActiveBubbleHint(null);
+      }
       let currentCorrectCiphers = [...correctCiphers];
       if (!correctCiphers.includes(targetNum)) {
         if (!isHint) updateScore(1); 
@@ -1361,6 +1405,13 @@ function App() {
 
                </div>
             </div>
+            
+            {activeBubbleHint && (
+                <div style={styles.bubbleHint}>
+                    <span style={{fontSize: '1.4rem'}}>🧚‍♀️</span> 
+                    <span>{activeBubbleHint.text}</span>
+                </div>
+            )}
         </div>
 
         <div style={{
@@ -1502,7 +1553,7 @@ const styles = {
   topSectionFixed: { backgroundColor: '#5C6B5E', flexShrink: 0, borderBottom: '4px solid #8CA595', display: 'flex', flexDirection: 'column' },
   topBar: { color: '#F3F0E9', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   hintContainer: { backgroundColor: '#EAE6DB', padding: '10px', textAlign: 'center' },
-  hintBtn: { backgroundColor: '#F3D28A', color: '#5C6B5E', border: 'none', padding: '8px 20px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #D4A373', fontSize: '0.9rem' },
+  bubbleHint: { backgroundColor: '#FFF8F0', color: '#5C6B5E', padding: '12px 20px', margin: '0', borderBottom: '2px dashed #D4A373', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', fontWeight: 'bold', textAlign: 'right', animation: 'focusPulse 2s infinite' },
   
   clearBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '8px 15px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #C4A587', fontSize: '0.9rem' },
 
