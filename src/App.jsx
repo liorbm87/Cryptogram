@@ -51,7 +51,7 @@ function App() {
   // --- תוספות למערכת הרמזים הכלכלית ---
   const [localStats, setLocalStats] = useState({});
   const currentKey = `${selectedCategory}_${selectedLevel}`;
-  const currentStats = player?.category_stats?.[currentKey] || localStats[currentKey] || { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false };
+  const currentStats = player?.category_stats?.[currentKey] || localStats[currentKey] || { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false, last_failed_time: null };
   const currentScore = currentStats.score;
   const globalHintCost = currentStats.hint_cost || 1;
   const globalRevealCost = currentStats.reveal_cost || 5;
@@ -392,6 +392,35 @@ function App() {
     fetchRandomPhrase();   
   };
 
+  const [timeLeft, setTimeLeft] = useState(null);
+
+  useEffect(() => {
+    const timerInterval = setInterval(() => {
+      if (currentStats?.last_failed_time) {
+        const failDate = new Date(currentStats.last_failed_time);
+        const now = new Date();
+        // שעה אחת לילדים (3600000ms), 12 שעות לאחרים
+        const waitMs = selectedCategory === 'ילדים' ? (1 * 60 * 60 * 1000) : (12 * 60 * 60 * 1000);
+        const diffMs = (failDate.getTime() + waitMs) - now.getTime();
+
+        if (diffMs <= 0) {
+          updateCategoryStats({ score: 5, last_failed_time: null });
+          setTimeLeft(null);
+          showToast("הזמן עבר! קיבלתם 5 זרעים חדשים במתנה 🌿");
+        } else {
+          const hours = Math.floor(diffMs / (1000 * 60 * 60));
+          const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+          const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
+          setTimeLeft(`${hours}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`);
+        }
+      } else {
+        setTimeLeft(null);
+      }
+    }, 1000);
+
+    return () => clearInterval(timerInterval);
+  }, [currentStats, currentKey, selectedCategory]);
+
   useEffect(() => {
     if (currentPhrase && Object.keys(userGuesses).length > 0) {
       const isWin = currentPhrase.text.split('').every((char, index) => {
@@ -424,7 +453,7 @@ function App() {
         setShowCycleResetMsg(triggerAlert);
 
         const newScore = Math.max(0, currentScore + winReward);
-        const newStats = { ...currentStats, score: newScore, hint_cost: nextHintCost, reveal_cost: nextRevealCost, cycle: currentCycle };
+        const newStats = { ...currentStats, score: newScore, hint_cost: nextHintCost, reveal_cost: nextRevealCost, cycle: currentCycle, last_failed_time: null };
 
         if (player) {
           const newCompleted = [...(player.completed_phrases || []), currentPhrase.id];
@@ -482,8 +511,14 @@ function App() {
     let cost = (hintsUsedInRound === 0 && isFirstTimeClue) ? 0 : globalHintCost;
     
     if (currentScore < cost) {
-      showToast(`חסרים לכם מעט זרעים... רמז דורש ${cost} זרעים.`);
+      if (!currentStats.last_failed_time) {
+        updateCategoryStats({ last_failed_time: new Date().toISOString() });
+      }
+      const waitText = selectedCategory === 'ילדים' ? 'שעה' : '12 שעות';
+      showToast(`חסרים זרעים... מתנה תגיע בעוד כ-${waitText} ⏳`);
       return;
+    }
+
     }
 
     let nextCost = cost === 0 ? globalHintCost : Math.min(5, globalHintCost + 1);
@@ -545,7 +580,11 @@ function App() {
     let cost = globalRevealCost;
     
     if (currentScore < cost) {
-      showToast(`חסרים לכם זרעים... חשיפת אות דורשת ${cost} זרעים.`);
+      if (!currentStats.last_failed_time) {
+        updateCategoryStats({ last_failed_time: new Date().toISOString() });
+      }
+      const waitText = selectedCategory === 'ילדים' ? 'שעה' : '12 שעות';
+      showToast(`חסרים זרעים... מתנה תגיע בעוד כ-${waitText} ⏳`);
       return;
     }
 
@@ -1428,7 +1467,14 @@ function App() {
               </button>
 
               <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                <div style={styles.scoreDisplay}>🌾 {currentScore} </div>
+                <div style={{textAlign: 'center'}}>
+  <div style={styles.scoreDisplay}>🌾 {currentScore} </div>
+  {timeLeft && (
+    <div style={{fontSize: '0.65rem', color: '#F3D28A', marginTop: '-2px', fontWeight: 'bold'}}>
+      מתנה ב: {timeLeft}
+    </div>
+  )}
+</div>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
                   <button style={{...styles.smallBtn, backgroundColor: '#F3D28A', color: '#5C6B5E', border: 'none', fontWeight:'bold'}} onClick={handleSkip}>לדלג 🍃</button>
                   <button style={styles.smallBtn} onClick={() => {saveCurrentProgress(); setAppState('menu');}}>תפריט</button>
