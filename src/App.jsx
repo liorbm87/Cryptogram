@@ -460,9 +460,17 @@ function App() {
 
     let nextCost = cost === 0 ? globalHintCost : Math.min(10, globalHintCost + 1);
 
-    // מציאת המספר שצריך לתת לו רמז
-    let targetNum = forcedHintFor;
-    if (targetNum === null) {
+    // מציאת המספר והאינדקס המדויק שצריך לתת לו רמז
+    let targetNum = null;
+    let targetIdx = -1;
+
+    if (forcedHintFor !== null) {
+      targetNum = forcedHintFor;
+      // מוצאים את המקום הראשון שבו מופיע המספר הנעול
+      targetIdx = currentPhrase.text.split('').findIndex((char, i) => 
+        cipherMap[char] === targetNum && !initialIndices.includes(i) && userGuesses[targetNum] !== char
+      );
+    } else {
       const unGuessedIndices = currentPhrase.text.split('').map((char, index) => {
         if (char === ' ') return -1;
         if (initialIndices.includes(index)) return -1;
@@ -471,15 +479,21 @@ function App() {
       }).filter(i => i !== -1);
       
       if (unGuessedIndices.length > 0) {
-        const randomIdx = unGuessedIndices[Math.floor(Math.random() * unGuessedIndices.length)];
-        targetNum = cipherMap[currentPhrase.text[randomIdx]];
+        targetIdx = unGuessedIndices[Math.floor(Math.random() * unGuessedIndices.length)];
+        targetNum = cipherMap[currentPhrase.text[targetIdx]];
       }
     }
 
-    if (targetNum === null) return;
+    if (targetNum === null || targetIdx === -1) return;
+
+    // --- עדכון התיבה המסומנת כדי שהמקלדת תקליד אליה ---
+    setSelectedNumber(targetNum);
+    setSelectedIndex(targetIdx);
+    if (inputRef.current) inputRef.current.focus();
+
     const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetNum);
 
-    // אם אנחנו בקטגוריית ילדים - נשלוף רמז חזותי ולא נחשוף מיד את האות
+    // אם אנחנו בקטגוריית ילדים - נשלוף רמז חזותי
     if (selectedCategory === 'ילדים') {
         const { data: hints } = await supabase.from('children_letter_hints')
             .select('*')
@@ -1440,8 +1454,11 @@ function App() {
                   let bgColor = '#FFF8F0';
                   let borderColor = '#D5D0C5';
                   
+                  const isHintActiveBox = activeBubbleHint && activeBubbleHint.num === num && isSelected;
+
                   if (isInitial) { bgColor = '#EAE6DB'; borderColor = '#BDB8B0'; }
                   else if (isForcedHint) { bgColor = '#F3D28A'; borderColor = '#D4A373'; } 
+                  else if (isHintActiveBox) { bgColor = '#FFF8F0'; borderColor = '#D4A373'; }
                   else if (isSelected) { bgColor = '#FFFFFF'; borderColor = '#A3C4BC'; }
 
                   return (
@@ -1453,7 +1470,8 @@ function App() {
                         height: `${boxSize * 1.35}px`, 
                         borderColor, 
                         backgroundColor: bgColor,
-                        animation: isSelected ? 'focusPulse 2s infinite' : 'none'
+                        animation: isSelected ? (isHintActiveBox ? 'focusPulse 1s infinite' : 'focusPulse 2s infinite') : 'none',
+                        boxShadow: isHintActiveBox ? '0 0 15px rgba(212, 163, 115, 0.4)' : 'none'
                       }} 
                       onPointerDown={(e) => {
                         e.preventDefault(); 
