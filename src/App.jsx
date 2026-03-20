@@ -583,12 +583,16 @@ function App() {
     const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetNum);
     
     if (letter === correctLetter) {
-      if (activeBubbleHint && targetNum === activeBubbleHint.num) {
+      let isTextHintActive = (activeBubbleHint && targetNum === activeBubbleHint.num);
+      if (isTextHintActive) {
           setActiveBubbleHint(null);
       }
       let currentCorrectCiphers = [...correctCiphers];
       if (!correctCiphers.includes(targetNum)) {
-        if (!isHint) updateScore(1); 
+        // לא מקבלים נקודה אם האות נחשפה (isHint) או נפתרה בזמן שבועית רמז פעילה (isTextHintActive)
+        if (!isHint && !isTextHintActive) {
+            updateScore(1); 
+        }
         currentCorrectCiphers.push(targetNum);
         setCorrectCiphers(currentCorrectCiphers);
         setStrikes(prev => ({...prev, [targetNum]: 0})); 
@@ -1001,41 +1005,53 @@ function App() {
             />
             <button style={{...styles.primaryBtn, padding: '8px', fontSize: '0.9rem'}} onClick={saveAdminWhatsNew}>שמירת הודעה</button>
           </div>
-          
-          <input 
-            type="text" 
-            placeholder="חיפוש לפי שם או טלפון..." 
-            value={adminSearch} 
-            onChange={(e) => setAdminSearch(e.target.value)} 
-            onFocus={() => setIsModalKeyboardOpen(true)}
-            onBlur={() => setIsModalKeyboardOpen(false)}
-            style={styles.input} 
-          />
-
-          <div style={{marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: isModalKeyboardOpen ? '200px' : '0'}}>
-            {filteredPlayers.map(p => (
-              <div key={p.id} style={styles.adminPlayerCard} onClick={() => openAdminEdit(p)}>
-                <div style={{fontWeight: 'bold', color: '#5C6B5E'}}>{p.first_name}</div>
-                <div style={{fontSize: '0.85rem', color: '#7E8B80'}}>{p.contact_info}</div>
-                <div style={{fontSize: '0.75rem', color: '#A3B1A6', marginTop: '5px'}}>
-                  כניסה אחרונה: {formatDateTime(p.last_login)}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
 
         {showVisitsModal && (
-          <div style={styles.overlay}>
-             <div style={styles.legalModal}>
-                <h3 style={{marginTop: 0, color: '#5C6B5E'}}>📊 סטטיסטיקות כניסה לאתר</h3>
-                <p style={{fontSize: '0.85rem', color: '#7E8B80'}}>המונה כולל את כלל הנכנסים לאתר (כולל אורחים).</p>
-                <div style={{display: 'flex', flexDirection: 'column', gap: '15px', margin: '20px 0'}}>
-                   <div style={{backgroundColor: '#F3F0E9', padding: '15px', borderRadius: '10px', fontSize: '1.2rem', color: '#5C6B5E'}}><strong>היום:</strong> {visitStats.today}</div>
-                   <div style={{backgroundColor: '#F3F0E9', padding: '15px', borderRadius: '10px', fontSize: '1.2rem', color: '#5C6B5E'}}><strong>שבוע אחרון:</strong> {visitStats.week}</div>
-                   <div style={{backgroundColor: '#F3F0E9', padding: '15px', borderRadius: '10px', fontSize: '1.2rem', color: '#5C6B5E'}}><strong>חודש אחרון:</strong> {visitStats.month}</div>
+          <div style={{
+            ...styles.overlay, 
+            alignItems: isModalKeyboardOpen ? 'flex-start' : 'center',
+            paddingTop: isModalKeyboardOpen ? '10%' : '0'
+          }}>
+             <div style={{...styles.legalModal, maxWidth: '500px', width: '95%'}}>
+                <h3 style={{marginTop: 0, color: '#5C6B5E', marginBottom: '15px'}}>📊 נתונים ומשתמשים</h3>
+                
+                <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
+                   <div style={{flex: 1, backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', fontSize: '0.9rem', color: '#5C6B5E', textAlign: 'center'}}><strong>היום</strong><br/>{visitStats.today}</div>
+                   <div style={{flex: 1, backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', fontSize: '0.9rem', color: '#5C6B5E', textAlign: 'center'}}><strong>שבוע</strong><br/>{visitStats.week}</div>
+                   <div style={{flex: 1, backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', fontSize: '0.9rem', color: '#5C6B5E', textAlign: 'center'}}><strong>חודש</strong><br/>{visitStats.month}</div>
                 </div>
-                <button style={{...styles.secondaryBtn, backgroundColor: '#D4A373', boxShadow: 'none'}} onClick={() => setShowVisitsModal(false)}>סגירה</button>
+                
+                <hr style={{margin: '10px 0 15px 0', borderColor: '#E2E8E4', opacity: 0.5}} />
+                
+                <input 
+                  type="text" 
+                  placeholder="חיפוש לפי שם או טלפון..." 
+                  value={adminSearch} 
+                  onChange={(e) => setAdminSearch(e.target.value)} 
+                  onFocus={() => setIsModalKeyboardOpen(true)}
+                  onBlur={() => setIsModalKeyboardOpen(false)}
+                  style={styles.input} 
+                />
+
+                <div style={{marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '40vh', overflowY: 'auto', paddingRight: '5px'}}>
+                  {filteredPlayers.length > 0 ? filteredPlayers.map(p => (
+                    <div key={p.id} style={styles.adminPlayerCard} onClick={() => {
+                        setShowVisitsModal(false);
+                        openAdminEdit(p);
+                    }}>
+                      <div style={{fontWeight: 'bold', color: '#5C6B5E'}}>{p.first_name}</div>
+                      <div style={{fontSize: '0.85rem', color: '#7E8B80'}}>{p.contact_info}</div>
+                      <div style={{fontSize: '0.75rem', color: '#A3B1A6', marginTop: '5px'}}>
+                        כניסה אחרונה: {formatDateTime(p.last_login)}
+                      </div>
+                    </div>
+                  )) : (
+                    <p style={{color: '#7E8B80', fontSize: '0.9rem'}}>לא נמצאו משתמשים...</p>
+                  )}
+                </div>
+
+                <button style={{...styles.secondaryBtn, backgroundColor: '#D4A373', boxShadow: 'none', marginTop: '15px'}} onClick={() => setShowVisitsModal(false)}>סגירה</button>
              </div>
           </div>
         )}
@@ -1219,19 +1235,22 @@ function App() {
 מטרת המשחק היא לפענח משפטים נסתרים. כל מספר מייצג אות קבועה בצופן.
 
 ✨ זרעים וניקוד:
-הזרעים הם הניקוד שלכם. בכל פעם שאתם פותרים צופן, אתם אוספים זרעים חדשים. זרעים אלו משמשים אתכם לקבלת רמזים ושחרור אותיות "מתקשות".
+חשיפת אות נכונה בכוחות עצמכם תעניק לכם זרע 1. בנוסף, סיום מוצלח של משפט שלם יעניק עד 5 זרעים כבונוס!
 
 🌿 נבטים (אותיות):
-האותיות הן כמו נבטים הגדלים מתוך האדמה. חלקן כבר גלויות וחלקן מחכות שתגלו אותן. (במחשב ניתן להקליד גם אם המקלדת נשארה על אנגלית!)
+האותיות הן כמו נבטים. חלקן גלויות וחלקן מחכות שתגלו אותן. (במחשב ניתן להקליד גם אם המקלדת באנגלית).
 
-💡 רמזים:
-צריכים עזרה? תוכלו להשתמש בזרעים שלכם כדי לקבל רמז. 
-שימו לב: הרמז הראשון בכל קטגוריה ורמה ניתן לכם כמתנה בחינם! לאחר מכן, פירות החכמה דורשים השקעה של זרעים. כל 3 צפנים שתפתרו, מחירי הרמזים יחזרו חזרה לזרע אחד!
+💡 עזרה ורמזים:
+נתקעתם? יש לכם 2 אפשרויות עזרה, אך שימו לב: שימוש בעזרה מבטל את קבלת הזרע על אותה אות, ומפחית את פרס הסיום הכללי.
+1. רמז עדין (חידה): מציג חידת מחשבה על האות. מחירו עולה בהדרגה (מ-1 עד 5 זרעים).
+2. חשיפה: מגלה את האות מיד. מחירו עולה בהדרגה (מ-5 עד 10 זרעים).
+
+🎁 מתנה למתמידים: הרמז הראשון בחינם! לאחר פתרון 3 משפטים, מחירי העזרה מתאפסים חזרה למחירם ההתחלתי.
 
 🔒 נעילת אותיות:
-אם תטעו יותר מדי פעמים באות מסוימת, התיבה תינעל (🌸). כדי להמשיך, תצטרכו להשתמש ברמז כדי לשחרר את הנעילה בעדינות.
+טעיתם יותר מדי פעמים? התיבה תינעל (🌸). כדי להמשיך, תצטרכו להשתמש באחת מאפשרויות העזרה כדי לשחרר אותה.
 
-מאחלים לכם מסע פיצוח מהנה ומלא בתובנות!`}
+מסע פיצוח מהנה ומלא בתובנות!`}
                 </div>
                 <button style={{...styles.primaryBtn, backgroundColor: '#8CA595', boxShadow: '0 4px 0 #708477'}} onClick={() => setShowInstructionsModal(false)}>הבנתי, בואו נשחק!</button>
              </div>
