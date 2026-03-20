@@ -51,9 +51,10 @@ function App() {
   // --- תוספות למערכת הרמזים הכלכלית ---
   const [localStats, setLocalStats] = useState({});
   const currentKey = `${selectedCategory}_${selectedLevel}`;
-  const currentStats = player?.category_stats?.[currentKey] || localStats[currentKey] || { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false };
+  const currentStats = player?.category_stats?.[currentKey] || localStats[currentKey] || { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false };
   const currentScore = currentStats.score;
   const globalHintCost = currentStats.hint_cost || 1;
+  const globalRevealCost = currentStats.reveal_cost || 5;
   const wordsInCycle = currentStats.cycle || 0;
 
   // --- חיבור למקלדת טלפון מובנית ---
@@ -132,7 +133,7 @@ function App() {
         p.completed_phrases = p.completed_phrases || [];
         p.saved_progress = p.saved_progress || {};
         p.category_stats = p.category_stats || {};
-        p.used_child_hints = p.used_child_hints || {};
+        p.used_hints = p.used_hints || p.used_child_hints || {};
         setPlayer(p);
         updateLoginHistoryInDB(p);
       }
@@ -407,21 +408,23 @@ function App() {
         const winReward = Math.max(0, 5 - hintsUsedInRound); 
         
         let currentCycle = wordsInCycle + 1;
-        let nextCost = globalHintCost;
+        let nextHintCost = globalHintCost;
+        let nextRevealCost = globalRevealCost;
         let triggerAlert = false;
 
         if (currentCycle >= 3) {
             currentCycle = 0;
-            if (globalHintCost > 1) {
+            if (globalHintCost > 1 || globalRevealCost > 5) {
               triggerAlert = true;
             }
-            nextCost = 1;
+            nextHintCost = 1;
+            nextRevealCost = 5;
         }
 
         setShowCycleResetMsg(triggerAlert);
 
         const newScore = Math.max(0, currentScore + winReward);
-        const newStats = { ...currentStats, score: newScore, hint_cost: nextCost, cycle: currentCycle };
+        const newStats = { ...currentStats, score: newScore, hint_cost: nextHintCost, reveal_cost: nextRevealCost, cycle: currentCycle };
 
         if (player) {
           const newCompleted = [...(player.completed_phrases || []), currentPhrase.id];
@@ -449,24 +452,12 @@ function App() {
     }
   }, [userGuesses]);
 
-  const applyHint = async () => {
-    const isFirstTimeClue = !currentStats.first_clue_given;
-    let cost = (hintsUsedInRound === 0 && isFirstTimeClue) ? 0 : globalHintCost;
-    
-    if (currentScore < cost) {
-      showToast(`חסרים לכם מעט זרעים... רמז דורש ${cost} זרעים.`);
-      return;
-    }
-
-    let nextCost = cost === 0 ? globalHintCost : Math.min(10, globalHintCost + 1);
-
-    // מציאת המספר והאינדקס המדויק שצריך לתת לו רמז
+  const getTargetForHint = () => {
     let targetNum = null;
     let targetIdx = -1;
 
     if (forcedHintFor !== null) {
       targetNum = forcedHintFor;
-      // מוצאים את המקום הראשון שבו מופיע המספר הנעול
       targetIdx = currentPhrase.text.split('').findIndex((char, i) => 
         cipherMap[char] === targetNum && !initialIndices.includes(i) && userGuesses[targetNum] !== char
       );
@@ -483,62 +474,96 @@ function App() {
         targetNum = cipherMap[currentPhrase.text[targetIdx]];
       }
     }
+    return { targetNum, targetIdx };
+  };
 
+  const applyTextHint = async () => {
+    const isFirstTimeClue = !currentStats.first_clue_given;
+    let cost = (hintsUsedInRound === 0 && isFirstTimeClue) ? 0 : globalHintCost;
+    
+    if (currentScore < cost) {
+      showToast(`חסרים לכם מעט זרעים... רמז דורש ${cost} זרעים.`);
+      return;
+    }
+
+    let nextCost = cost === 0 ? globalHintCost : Math.min(5, globalHintCost + 1);
+
+    const { targetNum, targetIdx } = getTargetForHint();
     if (targetNum === null || targetIdx === -1) return;
 
-    // --- עדכון התיבה המסומנת כדי שהמקלדת תקליד אליה ---
     setSelectedNumber(targetNum);
     setSelectedIndex(targetIdx);
     if (inputRef.current) inputRef.current.focus();
 
     const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetNum);
 
-    // אם אנחנו בקטגוריית ילדים - נשלוף רמז חזותי
-    if (selectedCategory === 'ילדים') {
-        const { data: hints } = await supabase.from('children_letter_hints')
-            .select('*')
-            .eq('letter', correctLetter)
-            .eq('level', selectedLevel);
-            
-        if (hints && hints.length > 0) {
-            let currentUsed = (player ? player.used_child_hints : localStats.used_child_hints) || {};
-            let usedForLetter = currentUsed[`${correctLetter}_${selectedLevel}`] || [];
-            
-            let unusedHints = hints.filter(h => !usedForLetter.includes(h.id));
-            if (unusedHints.length === 0) {
-                usedForLetter = [];
-                unusedHints = hints;
-            }
-            
-            const randomHint = unusedHints[Math.floor(Math.random() * unusedHints.length)];
-            const finalHintText = randomHint.hint_text.replace('{num}', targetNum);
-            
-            setActiveBubbleHint({ num: targetNum, text: finalHintText });
-            
-            usedForLetter.push(randomHint.id);
-            const newUsed = { ...currentUsed, [`${correctLetter}_${selectedLevel}`]: usedForLetter };
-            
-            if (player) {
-                const updatedPlayer = { ...player, used_child_hints: newUsed };
-                setPlayer(updatedPlayer);
-                syncPlayerToDB({ used_child_hints: newUsed });
-            } else {
-                setLocalStats(prev => ({ ...prev, used_child_hints: newUsed }));
-            }
+    let tableName = 'children_letter_hints';
+    if (selectedCategory === 'נוער') tableName = 'youth_letter_hints';
+    if (selectedCategory === 'מבוגרים') tableName = 'adult_letter_hints';
 
-            if (forcedHintFor !== null) setForcedHintFor(null);
-            updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
-            setHintsUsedInRound(prev => prev + 1);
-            return; 
+    const { data: hints } = await supabase.from(tableName)
+        .select('*')
+        .eq('letter', correctLetter)
+        .eq('level', selectedLevel);
+        
+    if (hints && hints.length > 0) {
+        let currentUsed = (player ? player.used_hints : localStats.used_hints) || {};
+        let usedKey = `${selectedCategory}_${correctLetter}_${selectedLevel}`;
+        let usedForLetter = currentUsed[usedKey] || [];
+        
+        let unusedHints = hints.filter(h => !usedForLetter.includes(h.id));
+        if (unusedHints.length === 0) {
+            usedForLetter = [];
+            unusedHints = hints;
         }
+        
+        const randomHint = unusedHints[Math.floor(Math.random() * unusedHints.length)];
+        const finalHintText = randomHint.hint_text.replace('{num}', targetNum);
+        
+        setActiveBubbleHint({ num: targetNum, text: finalHintText });
+        
+        usedForLetter.push(randomHint.id);
+        const newUsed = { ...currentUsed, [usedKey]: usedForLetter };
+        
+        if (player) {
+            const updatedPlayer = { ...player, used_hints: newUsed };
+            setPlayer(updatedPlayer);
+            syncPlayerToDB({ used_hints: newUsed });
+        } else {
+            setLocalStats(prev => ({ ...prev, used_hints: newUsed }));
+        }
+
+        if (forcedHintFor !== null) setForcedHintFor(null);
+        updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
+        setHintsUsedInRound(prev => prev + 1);
+    } else {
+        showToast("אין כרגע רמזים מילוליים לאות זו. נסו חשיפת אות.");
+    }
+  };
+
+  const applyRevealHint = async () => {
+    let cost = globalRevealCost;
+    
+    if (currentScore < cost) {
+      showToast(`חסרים לכם זרעים... חשיפת אות דורשת ${cost} זרעים.`);
+      return;
     }
 
-    // התנהגות רגילה (נוער, מבוגרים או אם אין רמז ב-DB)
-    if (forcedHintFor !== null) {
-      setForcedHintFor(null); 
-    }
+    let nextCost = Math.min(10, globalRevealCost + 1);
+
+    const { targetNum, targetIdx } = getTargetForHint();
+    if (targetNum === null || targetIdx === -1) return;
+
+    setSelectedNumber(targetNum);
+    setSelectedIndex(targetIdx);
+    if (inputRef.current) inputRef.current.focus();
+
+    const correctLetter = Object.keys(cipherMap).find(key => cipherMap[key] === targetNum);
+
+    if (forcedHintFor !== null) setForcedHintFor(null);
     handleVirtualKeyPress(correctLetter, targetNum, true);
-    updateCategoryStats({ score: currentScore - cost, hint_cost: nextCost, first_clue_given: true });
+    
+    updateCategoryStats({ score: currentScore - cost, reveal_cost: nextCost, first_clue_given: true });
     setHintsUsedInRound(prev => prev + 1);
     showToast(`האות נחשפה בעדינות 🍃`);
   };
@@ -833,7 +858,7 @@ function App() {
     allCategories.forEach(c => {
       allLevels.forEach(l => {
         const key = `${c}_${l}`;
-        fullStats[key] = p.category_stats?.[key] || { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false };
+        fullStats[key] = p.category_stats?.[key] || { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false };
       });
     });
 
@@ -845,7 +870,7 @@ function App() {
   const handleAdminScoreChange = (key, newScore) => {
     setAdminEditingStats(prev => ({
       ...prev,
-      [key]: { ...(prev[key] || {hint_cost: 1, cycle: 0, first_clue_given: false}), score: Number(newScore) }
+      [key]: { ...(prev[key] || {hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false}), score: Number(newScore) }
     }));
   };
 
@@ -860,15 +885,15 @@ function App() {
     if (!window.confirm(`האם אתה בטוח שברצונך לאפס לחלוטין את ${selectedAdminPlayer.first_name}? פעולה זו תמחק ניקוד והתקדמות.`)) return;
     
     const resetStats = {
-        'ילדים_easy': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
-        'ילדים_medium': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
-        'ילדים_hard': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
-        'נוער_easy': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
-        'נוער_medium': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
-        'נוער_hard': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
-        'מבוגרים_easy': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
-        'מבוגרים_medium': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false },
-        'מבוגרים_hard': { score: 5, hint_cost: 1, cycle: 0, first_clue_given: false }
+        'ילדים_easy': { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false },
+        'ילדים_medium': { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false },
+        'ילדים_hard': { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false },
+        'נוער_easy': { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false },
+        'נוער_medium': { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false },
+        'נוער_hard': { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false },
+        'מבוגרים_easy': { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false },
+        'מבוגרים_medium': { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false },
+        'מבוגרים_hard': { score: 5, hint_cost: 1, reveal_cost: 5, cycle: 0, first_clue_given: false }
     };
 
     const resetData = {
@@ -1393,27 +1418,37 @@ function App() {
             </div>
             
             <div style={styles.hintContainer}>
-               <div style={{display: 'flex', justifyContent: 'center', gap: '10px'}}>
+               <div style={{display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap'}}>
                  
                  <button 
-                   style={{...styles.hintBtn, animation: forcedHintFor ? 'pulse 1.5s infinite' : 'none'}} 
+                   style={{...styles.hintBtn, animation: forcedHintFor ? 'pulse 1.5s infinite' : 'none', flex: 1}} 
                    onPointerDown={(e) => {
                      e.preventDefault();
-                     applyHint();
+                     applyTextHint();
                    }}
                  >
-                   💡 {forcedHintFor ? 'בקשת עזרה' : 'רמז עדין'} ({(!currentStats.first_clue_given && hintsUsedInRound === 0) ? 'ללא זרעים' : '-' + globalHintCost})
+                   💡 {forcedHintFor ? 'עזרה' : 'רמז'} ({(!currentStats.first_clue_given && hintsUsedInRound === 0) ? 'חינם' : '-' + globalHintCost})
+                 </button>
+
+                 <button 
+                   style={{...styles.revealBtn, flex: 1}} 
+                   onPointerDown={(e) => {
+                     e.preventDefault();
+                     applyRevealHint();
+                   }}
+                 >
+                   🔍 חשיפה ({'-' + globalRevealCost})
                  </button>
                  
                  {hasMistakes && (
                    <button 
-                     style={styles.clearBtn} 
+                     style={{...styles.clearBtn, flex: 1}} 
                      onPointerDown={(e) => {
                        e.preventDefault();
                        handleClearMistakes();
                      }}
                    >
-                     🧹 ניקוי בלבולים
+                     🧹 ניקוי
                    </button>
                  )}
 
@@ -1573,7 +1608,9 @@ const styles = {
   hintContainer: { backgroundColor: '#EAE6DB', padding: '10px', textAlign: 'center' },
   bubbleHint: { backgroundColor: '#FFF8F0', color: '#5C6B5E', padding: '12px 20px', margin: '0', borderBottom: '2px dashed #D4A373', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', fontWeight: 'bold', textAlign: 'right', animation: 'focusPulse 2s infinite' },
   
-  clearBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '8px 15px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #C4A587', fontSize: '0.9rem' },
+  hintBtn: { backgroundColor: '#A3C4BC', color: '#FFFFFF', border: 'none', padding: '8px 10px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #82A29A', fontSize: '0.9rem' },
+  revealBtn: { backgroundColor: '#F3D28A', color: '#5C6B5E', border: 'none', padding: '8px 10px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #D4A373', fontSize: '0.9rem' },
+  clearBtn: { backgroundColor: '#E2C2A4', color: '#5C6B5E', border: 'none', padding: '8px 10px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 0 #C4A587', fontSize: '0.9rem' },
 
   scoreDisplay: { color: '#F3D28A', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '2px' },
   smallBtn: { background: 'none', border: '1px solid #F3F0E9', color: '#F3F0E9', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.75rem' },
