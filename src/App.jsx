@@ -406,7 +406,7 @@ function App() {
         if (diffMs <= 0) {
           updateCategoryStats({ score: 5, last_failed_time: null });
           setTimeLeft(null);
-          showToast("הזמן עבר! קיבלתם 5 זרעים חדשים במתנה 🌿");
+          showToast("הזמן עבר! 5 זרעים חדשים נבטו בהצלחה 🌿");
         } else {
           const hours = Math.floor(diffMs / (1000 * 60 * 60));
           const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -514,8 +514,8 @@ function App() {
       if (!currentStats.last_failed_time) {
         updateCategoryStats({ last_failed_time: new Date().toISOString() });
       }
-      const waitText = selectedCategory === 'ילדים' ? 'שעה' : '12 שעות';
-      showToast(`חסרים זרעים... מתנה תגיע בעוד כ-${waitText} ⏳`);
+      const exactTimeLeft = timeLeft || (selectedCategory === 'ילדים' ? '1:00:00' : '12:00:00');
+      showToast(`חסרים זרעים... זרעים ינבטו בעוד: ${exactTimeLeft} ⏳`);
       return;
     }
 
@@ -581,8 +581,8 @@ function App() {
       if (!currentStats.last_failed_time) {
         updateCategoryStats({ last_failed_time: new Date().toISOString() });
       }
-      const waitText = selectedCategory === 'ילדים' ? 'שעה' : '12 שעות';
-      showToast(`חסרים זרעים... מתנה תגיע בעוד כ-${waitText} ⏳`);
+      const exactTimeLeft = timeLeft || (selectedCategory === 'ילדים' ? '1:00:00' : '12:00:00');
+      showToast(`חסרים זרעים... זרעים ינבטו בעוד: ${exactTimeLeft} ⏳`);
       return;
     }
 
@@ -1469,7 +1469,7 @@ function App() {
   <div style={styles.scoreDisplay}>🌾 {currentScore} </div>
   {timeLeft && (
     <div style={{fontSize: '0.65rem', color: '#F3D28A', marginTop: '-2px', fontWeight: 'bold'}}>
-      מתנה ב: {timeLeft}
+      זרעים ינבטו בעוד: {timeLeft}
     </div>
   )}
 </div>
