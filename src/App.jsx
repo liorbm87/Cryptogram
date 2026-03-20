@@ -519,8 +519,6 @@ function App() {
       return;
     }
 
-    }
-
     let nextCost = cost === 0 ? globalHintCost : Math.min(5, globalHintCost + 1);
 
     const { targetNum, targetIdx } = getTargetForHint();
