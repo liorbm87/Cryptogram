@@ -86,7 +86,7 @@ function App() {
   const [showWhatsNewModal, setShowWhatsNewModal] = useState(false);
   const [adminWhatsNewInput, setAdminWhatsNewInput] = useState('');
   const [showVisitsModal, setShowVisitsModal] = useState(false);
-  const [visitStats, setVisitStats] = useState({ today: 0, week: 0, month: 0 });
+  const [visitStats, setVisitStats] = useState({ today: 0, week: 0, month: 0, playedToday: 0, playedWeek: 0, playedMonth: 0 });
 
   const syncTimeoutRef = useRef(null);
 
@@ -152,7 +152,11 @@ function App() {
       const lastGlobalVisit = localStorage.getItem('crypto_global_visit');
       const now = new Date();
       if (!lastGlobalVisit || (now - new Date(lastGlobalVisit)) > 1000 * 60 * 60) {
-        await supabase.from('site_visits').insert([{ visited_at: now.toISOString() }]);
+        const { data } = await supabase.from('site_visits').insert([{ visited_at: now.toISOString(), has_played: false }]).select().single();
+        if (data) {
+           localStorage.setItem('crypto_visit_id', data.id);
+           localStorage.setItem('crypto_has_played', 'false');
+        }
         localStorage.setItem('crypto_global_visit', now.toISOString());
       }
     };
@@ -626,6 +630,16 @@ function App() {
       }
       let currentCorrectCiphers = [...correctCiphers];
       if (!correctCiphers.includes(targetNum)) {
+        // --- דיווח סטטיסטיקה מורחב: המשתמש אשכרה התחיל לשחק! ---
+        if (localStorage.getItem('crypto_has_played') === 'false') {
+            const visitId = localStorage.getItem('crypto_visit_id');
+            if (visitId) {
+                supabase.from('site_visits').update({ has_played: true }).eq('id', visitId).then();
+            }
+            localStorage.setItem('crypto_has_played', 'true');
+        }
+        // ----------------------------------------------------------
+
         // לא מקבלים נקודה אם האות נחשפה (isHint) או נפתרה בזמן שבועית רמז פעילה (isTextHintActive)
         if (!isHint && !isTextHintActive) {
             updateScore(1); 
@@ -851,13 +865,19 @@ function App() {
     const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const monthStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const [dDay, dWeek, dMonth] = await Promise.all([
+    const [dDay, dWeek, dMonth, pDay, pWeek, pMonth] = await Promise.all([
       supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', todayStart),
       supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', weekStart),
-      supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', monthStart)
+      supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', monthStart),
+      supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', todayStart).eq('has_played', true),
+      supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', weekStart).eq('has_played', true),
+      supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('visited_at', monthStart).eq('has_played', true)
     ]);
     
-    setVisitStats({ today: dDay.count || 0, week: dWeek.count || 0, month: dMonth.count || 0 });
+    setVisitStats({ 
+      today: dDay.count || 0, week: dWeek.count || 0, month: dMonth.count || 0,
+      playedToday: pDay.count || 0, playedWeek: pWeek.count || 0, playedMonth: pMonth.count || 0 
+    });
   };
 
   const handleAdminAuth = async () => {
@@ -1054,9 +1074,9 @@ function App() {
                 <h3 style={{marginTop: 0, color: '#5C6B5E', marginBottom: '15px'}}>📊 נתונים ומשתמשים</h3>
                 
                 <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
-                   <div style={{flex: 1, backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', fontSize: '0.9rem', color: '#5C6B5E', textAlign: 'center'}}><strong>היום</strong><br/>{visitStats.today}</div>
-                   <div style={{flex: 1, backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', fontSize: '0.9rem', color: '#5C6B5E', textAlign: 'center'}}><strong>שבוע</strong><br/>{visitStats.week}</div>
-                   <div style={{flex: 1, backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', fontSize: '0.9rem', color: '#5C6B5E', textAlign: 'center'}}><strong>חודש</strong><br/>{visitStats.month}</div>
+                   <div style={{flex: 1, backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', fontSize: '0.9rem', color: '#5C6B5E', textAlign: 'center'}}><strong>היום</strong><br/>{visitStats.today} נכנסו<br/><span style={{color: '#8CA595', fontWeight: 'bold'}}>{visitStats.playedToday} שיחקו</span></div>
+                   <div style={{flex: 1, backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', fontSize: '0.9rem', color: '#5C6B5E', textAlign: 'center'}}><strong>שבוע</strong><br/>{visitStats.week} נכנסו<br/><span style={{color: '#8CA595', fontWeight: 'bold'}}>{visitStats.playedWeek} שיחקו</span></div>
+                   <div style={{flex: 1, backgroundColor: '#F3F0E9', padding: '10px', borderRadius: '10px', fontSize: '0.9rem', color: '#5C6B5E', textAlign: 'center'}}><strong>חודש</strong><br/>{visitStats.month} נכנסו<br/><span style={{color: '#8CA595', fontWeight: 'bold'}}>{visitStats.playedMonth} שיחקו</span></div>
                 </div>
                 
                 <hr style={{margin: '10px 0 15px 0', borderColor: '#E2E8E4', opacity: 0.5}} />
