@@ -1185,9 +1185,18 @@ function App() {
           )}
 
           <img 
-            src="https://i.postimg.cc/MKHZBh1K/1000182904-removebg-preview.png" 
+            src="https://i.postimg.cc/Z5D7mBxd/IMG-20260328-WA0016.jpg" 
             alt="Cryptosophia" 
-            style={{ width: '130px', height: 'auto', margin: '0 auto 10px auto', display: 'block', cursor: 'pointer' }} 
+            style={{ 
+              width: '140px', 
+              height: '140px', 
+              objectFit: 'cover', 
+              borderRadius: '24px', 
+              margin: '0 auto 15px auto', 
+              display: 'block', 
+              cursor: 'pointer',
+              boxShadow: '0 8px 16px rgba(92, 107, 94, 0.15)'
+            }} 
             onDoubleClick={() => setShowAdminAuth(true)}
           />
           <h1 style={styles.title}>Cryptosophia</h1>
